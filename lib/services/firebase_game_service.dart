@@ -187,7 +187,6 @@ class FirebaseGameService implements IGameService {
       } else {
         cardsRaw.removeAt(cardIndex);
       }
-      transaction.set(handRef, {'cards': cardsRaw});
 
       // 3. Stacking Penalty Calculation:
       int currentPending = (roomData['drawCountPending'] as int?) ?? 0;
@@ -253,6 +252,11 @@ class FirebaseGameService implements IGameService {
         }
       }
 
+      // If not 7's swap or 0's pass, commit the updated hand
+      if (playedCard.type != CardType.pointSevenSwap && playedCard.type != CardType.pointZeroPass) {
+        transaction.set(handRef, {'cards': cardsRaw});
+      }
+
       // Update player summary count & check winner (0 cards = Win!)
       String? winnerId;
       final updatedPlayers = rawPlayers.map((p) {
@@ -289,6 +293,7 @@ class FirebaseGameService implements IGameService {
     final deckRef = roomRef.collection('deck').doc('draw_pile');
 
     await _firestore.runTransaction((transaction) async {
+      // 1. ALL READS MUST OCCUR FIRST
       final roomSnap = await transaction.get(roomRef);
       if (!roomSnap.exists) return;
       final roomData = roomSnap.data()!;
@@ -299,33 +304,26 @@ class FirebaseGameService implements IGameService {
         return; // Reject draw if not player's turn
       }
 
-      // Stacking Rule: If penalty is accumulated (e.g. +4, +6, +10 = 20),
-      // the targeted player MUST draw ALL accumulated cards!
+      final deckSnap = await transaction.get(deckRef);
+      final handSnap = await transaction.get(handRef);
+
+      // 2. IN-MEMORY COMPUTATION (NO WRITES YET)
       int pending = (roomData['drawCountPending'] as int?) ?? 0;
       int countToDraw = pending > 0 ? pending : 1;
 
-      final deckSnap = await transaction.get(deckRef);
-      List<dynamic> rawDeck = (deckSnap.data()?['cards'] as List<dynamic>? ?? []);
-
+      List<dynamic> rawDeck = List<dynamic>.from(deckSnap.data()?['cards'] as List<dynamic>? ?? []);
       while (rawDeck.length < countToDraw) {
         rawDeck.addAll(DeckGenerator.generateNoMercyDeck().map(_cardToMap));
       }
 
       final drawnCards = rawDeck.sublist(0, countToDraw);
       final remainingDeck = rawDeck.sublist(countToDraw);
-      transaction.set(deckRef, {'cards': remainingDeck});
 
-      final handSnap = await transaction.get(handRef);
-      final cardsRaw = (handSnap.data()?['cards'] as List<dynamic>? ?? []);
+      final cardsRaw = List<dynamic>.from(handSnap.data()?['cards'] as List<dynamic>? ?? []);
       cardsRaw.addAll(drawnCards);
 
       // Mercy Rule: 25 cards or more = Knocked Out!
       bool isKnockedOut = cardsRaw.length >= 25;
-      if (isKnockedOut) {
-        transaction.set(handRef, {'cards': []}); // Eliminate cards
-      } else {
-        transaction.set(handRef, {'cards': cardsRaw});
-      }
 
       // Next player's turn
       final rawPlayers = (roomData['players'] as List<dynamic>? ?? []);
@@ -352,6 +350,9 @@ class FirebaseGameService implements IGameService {
       final remainingStanding = updatedPlayers.where((p) => p['isKnockedOut'] != true).toList();
       String? winnerId = remainingStanding.length == 1 ? remainingStanding.first['id'] : null;
 
+      // 3. ALL WRITES OCCUR AFTER ALL READS
+      transaction.set(deckRef, {'cards': remainingDeck});
+      transaction.set(handRef, {'cards': isKnockedOut ? [] : cardsRaw});
       transaction.update(roomRef, {
         'players': updatedPlayers,
         'drawCountPending': 0, // Penalty consumed!

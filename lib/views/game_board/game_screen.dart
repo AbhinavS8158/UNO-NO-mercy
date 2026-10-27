@@ -456,6 +456,15 @@ class _GameScreenState extends State<GameScreen> {
       }
     } catch (e) {
       debugPrint('Draw card error: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('കാർഡ് എടുക്കാൻ കഴിഞ്ഞില്ല: $e'),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
+      }
     }
   }
 
