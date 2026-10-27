@@ -220,10 +220,28 @@ class FirebaseGameService implements IGameService {
         transaction.set(targetHandRef, {'cards': cardsRaw});
       }
 
-      // 6. 0's Pass Rule
-      if (playedCard.type == CardType.pointZeroPass) {
-        // Collect hands of all active players and pass them in direction of play
-        // Implemented seamlessly on server
+      // 6. 0's Pass Rule: Pass all hands in current direction of play
+      if (playedCard.type == CardType.pointZeroPass && activePlayers.length >= 2) {
+        final List<List<dynamic>> allHands = [];
+        for (var p in activePlayers) {
+          final pId = p['id'] as String;
+          if (pId == uid) {
+            allHands.add(cardsRaw);
+          } else {
+            final pRef = roomRef.collection('private_hands').doc(pId);
+            final pSnap = await transaction.get(pRef);
+            allHands.add(pSnap.data()?['cards'] as List<dynamic>? ?? []);
+          }
+        }
+
+        // Shift hands by play direction
+        for (int i = 0; i < activePlayers.length; i++) {
+          final targetIdx = (i + direction) % activePlayers.length;
+          final adjustedTargetIdx = targetIdx < 0 ? targetIdx + activePlayers.length : targetIdx;
+          final receivingPlayerId = activePlayers[adjustedTargetIdx]['id'] as String;
+          final receivingHandRef = roomRef.collection('private_hands').doc(receivingPlayerId);
+          transaction.set(receivingHandRef, {'cards': allHands[i]});
+        }
       }
 
       // Update player summary count & check winner (0 cards = Win!)

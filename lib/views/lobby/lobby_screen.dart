@@ -7,6 +7,7 @@ import '../../core/theme/uno_colors.dart';
 import '../../services/game_service.dart';
 import '../../services/firebase_game_service.dart';
 import '../game_board/game_screen.dart';
+import '../widgets/rules_dialog.dart';
 
 class LobbyScreen extends StatefulWidget {
   const LobbyScreen({super.key});
@@ -224,6 +225,23 @@ class _LobbyScreenState extends State<LobbyScreen> {
         Text(
           'Real-time Multiplayer + Voice Chat',
           style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 12),
+        ),
+        const SizedBox(height: 10),
+        TextButton.icon(
+          onPressed: () => showDialog(
+            context: context,
+            builder: (context) => const RulesDialog(),
+          ),
+          icon: const Icon(Icons.menu_book, color: UnoColors.yellow, size: 18),
+          label: const Text(
+            'Official No Mercy Rules',
+            style: TextStyle(color: UnoColors.yellow, fontWeight: FontWeight.bold),
+          ),
+          style: TextButton.styleFrom(
+            backgroundColor: Colors.white10,
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          ),
         ),
       ],
     );

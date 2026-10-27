@@ -12,6 +12,7 @@ import '../../services/voice_service.dart';
 import '../widgets/card_fan_layout.dart';
 import '../widgets/voice_control_bar.dart';
 import '../widgets/chat_overlay_dialog.dart';
+import '../widgets/rules_dialog.dart';
 import 'table_center_view.dart';
 import 'animated_card_overlay.dart';
 
@@ -531,6 +532,14 @@ class _GameScreenState extends State<GameScreen> {
             ),
           ),
           const Spacer(),
+          IconButton(
+            tooltip: 'Game Rules',
+            icon: const Icon(Icons.help_outline_rounded, color: UnoColors.yellow),
+            onPressed: () => showDialog(
+              context: context,
+              builder: (context) => const RulesDialog(),
+            ),
+          ),
           IconButton(
             tooltip: 'Live Voice Chat',
             icon: Icon(
