@@ -10,6 +10,7 @@ import '../../services/game_service.dart';
 import '../../services/firebase_game_service.dart';
 import '../../services/voice_service.dart';
 import '../widgets/card_fan_layout.dart';
+import '../widgets/uno_card_widget.dart';
 import '../widgets/voice_control_bar.dart';
 import '../widgets/chat_overlay_dialog.dart';
 import '../widgets/rules_dialog.dart';
@@ -322,13 +323,28 @@ class _GameScreenState extends State<GameScreen> {
       }
     }
 
+    // 3. If Discard All card, ask player which matching card should be placed on TOP!
+    String? discardAllTopCardId;
+    UnoCard cardToAnimate = card;
+    if (card.type == CardType.discardAll) {
+      final matchingColorCards = _playerHand.where((c) => c.color == card.color).toList();
+      if (matchingColorCards.length > 1) {
+        final chosenTopCard = await _showDiscardAllTopCardDialog(matchingColorCards, card);
+        if (chosenTopCard == null) return; // User cancelled
+        discardAllTopCardId = chosenTopCard.id;
+        cardToAnimate = chosenTopCard;
+      } else {
+        discardAllTopCardId = card.id;
+      }
+    }
+
     final screenSize = MediaQuery.of(context).size;
     final startOffset = Offset(screenSize.width * 0.4, screenSize.height * 0.7);
     final endOffset = Offset(screenSize.width * 0.5 - 45, screenSize.height * 0.38);
 
     setState(() {
       _flyingCardWidget = FlyingCardAnimation(
-        card: card,
+        card: cardToAnimate,
         startOffset: startOffset,
         endOffset: endOffset,
         onCompleted: () async {
@@ -343,6 +359,7 @@ class _GameScreenState extends State<GameScreen> {
             cardId: card.id,
             chosenColor: chosenColor,
             swapTargetPlayerId: swapTargetPlayerId,
+            discardAllTopCardId: discardAllTopCardId,
           );
 
           if (card.type == CardType.skipEveryone && mounted) {
@@ -369,6 +386,15 @@ class _GameScreenState extends State<GameScreen> {
               const SnackBar(
                 content: Text('🔄 0 PASS! കാർഡുകൾ അടുത്തയാൾക്ക് കൈമാറി!'),
                 backgroundColor: Colors.teal,
+                duration: Duration(seconds: 2),
+              ),
+            );
+          } else if (card.type == CardType.discardAll && mounted) {
+            ScaffoldMessenger.of(context).hideCurrentSnackBar();
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('💥 DISCARD ALL! ആ കളറിലുള്ള എല്ലാ കാർഡുകളും ഡിസ്കാർഡ് ചെയ്തു!'),
+                backgroundColor: Colors.deepPurpleAccent,
                 duration: Duration(seconds: 2),
               ),
             );
@@ -444,6 +470,67 @@ class _GameScreenState extends State<GameScreen> {
               onTap: () => Navigator.pop(context, opp.id),
             );
           }).toList(),
+        ),
+      ),
+    );
+  }
+
+  Future<UnoCard?> _showDiscardAllTopCardDialog(List<UnoCard> cards, UnoCard defaultCard) async {
+    return showDialog<UnoCard>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        backgroundColor: UnoColors.surfaceElevated,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Column(
+          children: [
+            Text(
+              'DISCARD ALL: ഏത് കാർഡ് മുകളിൽ വേണം?',
+              style: GoogleFonts.bebasNeue(color: UnoColors.yellow, fontSize: 22, letterSpacing: 1.2),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 6),
+            const Text(
+              'മുകളിൽ വെക്കാൻ ആഗ്രഹിക്കുന്ന കാർഡ് തിരഞ്ഞെടുക്കുക',
+              style: TextStyle(color: Colors.white70, fontSize: 13),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: cards.map((c) {
+                return Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+                  child: InkWell(
+                    onTap: () => Navigator.pop(context, c),
+                    borderRadius: BorderRadius.circular(12),
+                    child: Container(
+                      padding: const EdgeInsets.all(4),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: c.id == defaultCard.id ? UnoColors.yellow : Colors.transparent,
+                          width: 2,
+                        ),
+                      ),
+                      child: UnoCardWidget(
+                        card: c,
+                        width: 75,
+                        height: 110,
+                        isPlayable: true,
+                        onTap: () => Navigator.pop(context, c),
+                      ),
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
         ),
       ),
     );

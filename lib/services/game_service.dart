@@ -13,6 +13,7 @@ abstract class IGameService {
     required String cardId,
     CardColor? chosenColor,
     String? swapTargetPlayerId,
+    String? discardAllTopCardId,
   });
   Future<void> drawCard({required String roomId});
   Future<void> passTurn({required String roomId});
@@ -163,6 +164,7 @@ class LocalGameService implements IGameService {
     required String cardId,
     CardColor? chosenColor,
     String? swapTargetPlayerId,
+    String? discardAllTopCardId,
   }) async {
     final room = _rooms[roomId];
     if (room == null) return;
@@ -172,7 +174,15 @@ class LocalGameService implements IGameService {
     if (cardIndex == -1) return;
 
     final card = hand[cardIndex];
-    hand.removeAt(cardIndex);
+    UnoCard topCardToSet = card;
+    if (card.type == CardType.discardAll) {
+      if (discardAllTopCardId != null) {
+        topCardToSet = hand.firstWhere((c) => c.id == discardAllTopCardId, orElse: () => card);
+      }
+      hand.removeWhere((c) => c.color == card.color);
+    } else {
+      hand.removeAt(cardIndex);
+    }
 
     final activePlayers = room.players;
     int curIdx = activePlayers.indexWhere((p) => p.id == currentUserId);
@@ -191,8 +201,8 @@ class LocalGameService implements IGameService {
       status: room.status,
       currentTurn: nextTurnId,
       turnDirection: room.turnDirection,
-      topCard: card,
-      activeColor: chosenColor ?? (card.isWild ? CardColor.blue : card.color),
+      topCard: topCardToSet,
+      activeColor: chosenColor ?? (topCardToSet.isWild ? CardColor.blue : topCardToSet.color),
       drawCountPending: card.isDrawPenalty ? room.drawCountPending + card.penaltyCount : 0,
       players: room.players,
     );

@@ -154,6 +154,7 @@ class FirebaseGameService implements IGameService {
     required String cardId,
     CardColor? chosenColor,
     String? swapTargetPlayerId,
+    String? discardAllTopCardId,
   }) async {
     final uid = await _ensureAuthenticated();
     final roomRef = _firestore.collection('rooms').doc(roomId);
@@ -182,7 +183,15 @@ class FirebaseGameService implements IGameService {
 
       // 2. Discard All Rule:
       // Discards every card in hand that matches this card's color!
+      // The player chooses which card is placed on top of the discard pile.
+      Map<String, dynamic> topCardToPlace = playedCardMap;
       if (playedCard.type == CardType.discardAll) {
+        if (discardAllTopCardId != null) {
+          final matchIndex = cardsRaw.indexWhere((c) => c['id'] == discardAllTopCardId);
+          if (matchIndex != -1) {
+            topCardToPlace = Map<String, dynamic>.from(cardsRaw[matchIndex] as Map<String, dynamic>);
+          }
+        }
         cardsRaw.removeWhere((c) => c['color'] == playedCardMap['color']);
       } else {
         cardsRaw.removeAt(cardIndex);
@@ -290,8 +299,8 @@ class FirebaseGameService implements IGameService {
       }).toList();
 
       transaction.update(roomRef, {
-        'topCard': playedCardMap,
-        'activeColor': chosenColor?.name.toUpperCase() ?? playedCardMap['color'],
+        'topCard': topCardToPlace,
+        'activeColor': chosenColor?.name.toUpperCase() ?? topCardToPlace['color'],
         'drawCountPending': currentPending,
         'turnDirection': direction,
         'currentTurn': nextTurnId,
