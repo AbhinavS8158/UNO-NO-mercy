@@ -15,6 +15,7 @@ abstract class IGameService {
     String? swapTargetPlayerId,
   });
   Future<void> drawCard({required String roomId});
+  Future<void> passTurn({required String roomId});
   Future<void> callUno({required String roomId, required String callerName});
   Stream<GameRoom> streamRoom(String roomId);
   Stream<List<UnoCard>> streamPrivateHand(String roomId, String myUserId);
@@ -220,11 +221,21 @@ class LocalGameService implements IGameService {
     _handController.add(List.from(hand));
 
     if (room != null) {
+      final activePlayers = room.players;
+      int curIdx = activePlayers.indexWhere((p) => p.id == currentUserId);
+      if (curIdx == -1) curIdx = 0;
+      String nextTurnId = room.currentTurn;
+      // If penalty draw, turn passes automatically
+      if (countToDraw > 1 && activePlayers.length > 1) {
+        int nextIdx = (curIdx + 1) % activePlayers.length;
+        nextTurnId = activePlayers[nextIdx].id;
+      }
+
       final updatedRoom = GameRoom(
         id: roomId,
         roomCode: room.roomCode,
         status: room.status,
-        currentTurn: room.currentTurn,
+        currentTurn: nextTurnId,
         turnDirection: room.turnDirection,
         topCard: room.topCard,
         activeColor: room.activeColor,
@@ -245,6 +256,36 @@ class LocalGameService implements IGameService {
       _rooms[roomId] = updatedRoom;
       _roomController.add(updatedRoom);
     }
+  }
+
+  @override
+  Future<void> passTurn({required String roomId}) async {
+    final room = _rooms[roomId];
+    if (room == null) return;
+    final activePlayers = room.players;
+    int curIdx = activePlayers.indexWhere((p) => p.id == currentUserId);
+    if (curIdx == -1) curIdx = 0;
+    String nextTurnId = room.currentTurn;
+    if (activePlayers.length > 1) {
+      int nextIdx = (curIdx + 1) % activePlayers.length;
+      nextTurnId = activePlayers[nextIdx].id;
+    }
+
+    final updatedRoom = GameRoom(
+      id: roomId,
+      roomCode: room.roomCode,
+      status: room.status,
+      currentTurn: nextTurnId,
+      turnDirection: room.turnDirection,
+      topCard: room.topCard,
+      activeColor: room.activeColor,
+      drawCountPending: 0,
+      remainingDeckCount: room.remainingDeckCount,
+      players: room.players,
+      lastUnoCall: room.lastUnoCall,
+    );
+    _rooms[roomId] = updatedRoom;
+    _roomController.add(updatedRoom);
   }
 
   @override

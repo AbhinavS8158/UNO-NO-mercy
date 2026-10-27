@@ -350,16 +350,51 @@ class FirebaseGameService implements IGameService {
       final remainingStanding = updatedPlayers.where((p) => p['isKnockedOut'] != true).toList();
       String? winnerId = remainingStanding.length == 1 ? remainingStanding.first['id'] : null;
 
+      // If penalty draw (e.g. +4, +6, +10), turn passes automatically.
+      // If normal 1-card draw, player retains turn to play the card or pass!
+      final turnAfterDraw = (countToDraw > 1) ? nextTurnId : uid;
+
       // 3. ALL WRITES OCCUR AFTER ALL READS
       transaction.set(deckRef, {'cards': remainingDeck});
       transaction.set(handRef, {'cards': isKnockedOut ? [] : cardsRaw});
       transaction.update(roomRef, {
         'players': updatedPlayers,
         'drawCountPending': 0, // Penalty consumed!
-        'currentTurn': nextTurnId,
+        'currentTurn': turnAfterDraw,
         'remainingDeckCount': remainingDeck.length,
         if (winnerId != null) 'winnerId': winnerId,
         if (winnerId != null) 'status': 'ended',
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+    });
+  }
+
+  @override
+  Future<void> passTurn({required String roomId}) async {
+    final uid = await _ensureAuthenticated();
+    final roomRef = _firestore.collection('rooms').doc(roomId);
+
+    await _firestore.runTransaction((transaction) async {
+      final roomSnap = await transaction.get(roomRef);
+      if (!roomSnap.exists) return;
+      final roomData = roomSnap.data()!;
+
+      final currentTurn = roomData['currentTurn'] as String?;
+      if (currentTurn != null && currentTurn.isNotEmpty && currentTurn != uid) {
+        return; // Only active player can pass
+      }
+
+      final rawPlayers = (roomData['players'] as List<dynamic>? ?? []);
+      final activePlayers = rawPlayers.where((p) => p['isKnockedOut'] != true).toList();
+      int curIdx = activePlayers.indexWhere((p) => p['id'] == uid);
+      if (curIdx == -1) curIdx = 0;
+      final direction = (roomData['turnDirection'] as int?) ?? 1;
+      int nextIdx = (curIdx + direction) % activePlayers.length;
+      if (nextIdx < 0) nextIdx += activePlayers.length;
+      final nextTurnId = activePlayers[nextIdx]['id'];
+
+      transaction.update(roomRef, {
+        'currentTurn': nextTurnId,
         'updatedAt': FieldValue.serverTimestamp(),
       });
     });

@@ -67,6 +67,7 @@ class _GameScreenState extends State<GameScreen> {
   // Player's Own Hand (Unique cards)
   List<UnoCard> _playerHand = [];
   UnoCard? _selectedCard;
+  bool _hasDrawnThisTurn = false;
 
   // Active Real Opponents (Only players who actually joined this room!)
   List<PlayerSummary> _allPlayers = [];
@@ -109,6 +110,9 @@ class _GameScreenState extends State<GameScreen> {
         _isClockwise = room.turnDirection == 1;
         _currentTurn = room.currentTurn;
         _remainingDeckCount = room.remainingDeckCount;
+        if (room.currentTurn != _myUid) {
+          _hasDrawnThisTurn = false;
+        }
 
         // Keep full list of players in room
         _allPlayers = room.players;
@@ -302,6 +306,7 @@ class _GameScreenState extends State<GameScreen> {
           setState(() {
             _flyingCardWidget = null;
             _selectedCard = null;
+            _hasDrawnThisTurn = false;
           });
           // Commit move to Firebase Server
           await _gameService.playCard(
@@ -416,6 +421,18 @@ class _GameScreenState extends State<GameScreen> {
       return;
     }
 
+    if (_hasDrawnThisTurn) {
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('നിങ്ങൾ ഇതിനകം കാർഡ് എടുത്തു കഴിഞ്ഞു! കയ്യിലുള്ള കാർഡ് വെക്കുകയോ "PASS" അമർത്തുകയോ ചെയ്യുക.'),
+          backgroundColor: Colors.orangeAccent,
+          duration: Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
+
     final effectiveRoomId = widget.roomId.isNotEmpty ? widget.roomId : widget.roomCode;
     final int countBeingDrawn = _pendingDrawCount > 0 ? _pendingDrawCount : 1;
 
@@ -440,17 +457,20 @@ class _GameScreenState extends State<GameScreen> {
     try {
       await _gameService.drawCard(roomId: effectiveRoomId);
       if (mounted) {
+        setState(() {
+          _hasDrawnThisTurn = countBeingDrawn == 1;
+        });
         ScaffoldMessenger.of(context).hideCurrentSnackBar();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
               countBeingDrawn > 1
                   ? '⚠️ +$countBeingDrawn പെനാൽറ്റി കാർഡുകൾ എടുത്തു!'
-                  : '🃏 ഡെക്കിൽ നിന്നും ഒരു കാർഡ് എടുത്തു!',
+                  : '🃏 കാർഡ് എടുത്തു! മാച്ച് ഉണ്ടെങ്കിൽ കാർഡ് വെക്കാം, അല്ലെങ്കിൽ "PASS" അമർത്തുക.',
               style: const TextStyle(fontWeight: FontWeight.bold),
             ),
             backgroundColor: countBeingDrawn > 1 ? Colors.orangeAccent : UnoColors.blue,
-            duration: const Duration(milliseconds: 1500),
+            duration: const Duration(milliseconds: 2000),
           ),
         );
       }
@@ -465,6 +485,29 @@ class _GameScreenState extends State<GameScreen> {
           ),
         );
       }
+    }
+  }
+
+  void _handlePassTurn() async {
+    final effectiveRoomId = widget.roomId.isNotEmpty ? widget.roomId : widget.roomCode;
+    setState(() {
+      _hasDrawnThisTurn = false;
+      _selectedCard = null;
+    });
+    try {
+      await _gameService.passTurn(roomId: effectiveRoomId);
+      if (mounted) {
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('ടേൺ അടുത്ത കളിക്കാരനിലേക്ക് പാസ്സ് ചെയ്തു.'),
+            backgroundColor: Colors.blueGrey,
+            duration: Duration(milliseconds: 1500),
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('Pass turn error: $e');
     }
   }
 
@@ -923,25 +966,42 @@ class _GameScreenState extends State<GameScreen> {
           ),
           Row(
             children: [
-              ElevatedButton.icon(
-                onPressed: _drawCardFromDeck,
-                icon: Icon(
-                  _pendingDrawCount > 0 ? Icons.warning_amber_rounded : Icons.add_card,
-                  size: 15,
-                  color: Colors.white,
+              if (_hasDrawnThisTurn)
+                ElevatedButton.icon(
+                  onPressed: _handlePassTurn,
+                  icon: const Icon(Icons.arrow_forward_rounded, size: 16, color: Colors.black),
+                  label: Text(
+                    'PASS (പാസ്സ് ചെയ്യുക)',
+                    style: GoogleFonts.bebasNeue(fontSize: 15, letterSpacing: 1.0, color: Colors.black),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.amberAccent,
+                    foregroundColor: Colors.black,
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                    elevation: 4,
+                  ),
+                )
+              else
+                ElevatedButton.icon(
+                  onPressed: _drawCardFromDeck,
+                  icon: Icon(
+                    _pendingDrawCount > 0 ? Icons.warning_amber_rounded : Icons.add_card,
+                    size: 15,
+                    color: Colors.white,
+                  ),
+                  label: Text(
+                    _pendingDrawCount > 0 ? 'DRAW +$_pendingDrawCount' : 'DRAW CARD',
+                    style: GoogleFonts.bebasNeue(fontSize: 15, letterSpacing: 1.0),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: _pendingDrawCount > 0 ? Colors.redAccent : UnoColors.blue,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                    elevation: 3,
+                  ),
                 ),
-                label: Text(
-                  _pendingDrawCount > 0 ? 'DRAW +$_pendingDrawCount' : 'DRAW CARD',
-                  style: GoogleFonts.bebasNeue(fontSize: 15, letterSpacing: 1.0),
-                ),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: _pendingDrawCount > 0 ? Colors.redAccent : UnoColors.blue,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                  elevation: 3,
-                ),
-              ),
               const SizedBox(width: 8),
               ElevatedButton(
                 onPressed: () async {
