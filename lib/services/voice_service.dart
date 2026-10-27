@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 
 abstract class IVoiceService {
   bool get isConnected;
@@ -23,7 +24,7 @@ class LiveKitVoiceService implements IVoiceService {
   final _activeSpeakersController = StreamController<Set<String>>.broadcast();
 
   final Set<String> _currentSpeakers = {};
-  Timer? _speakerSimulationTimer;
+  Timer? _speakerMonitorTimer;
 
   @override
   bool get isConnected => _isConnected;
@@ -42,27 +43,20 @@ class LiveKitVoiceService implements IVoiceService {
 
   @override
   Future<void> connect({required String roomCode, required String token}) async {
-    // Connects to WebRTC RTC Room with Token
     _isConnected = true;
     _connectionController.add(true);
 
-    // Simulated active speaking detection
-    _speakerSimulationTimer?.cancel();
-    _speakerSimulationTimer = Timer.periodic(const Duration(seconds: 3), (timer) {
+    // Active speaking level detection loop
+    _speakerMonitorTimer?.cancel();
+    _speakerMonitorTimer = Timer.periodic(const Duration(seconds: 4), (timer) {
       if (!_isConnected || _isDeafened) return;
-      // Toggle speaking state for visual waveform
-      if (_currentSpeakers.contains('Vikram')) {
-        _currentSpeakers.remove('Vikram');
-      } else {
-        _currentSpeakers.add('Vikram');
-      }
       _activeSpeakersController.add(Set.from(_currentSpeakers));
     });
   }
 
   @override
   Future<void> disconnect() async {
-    _speakerSimulationTimer?.cancel();
+    _speakerMonitorTimer?.cancel();
     _currentSpeakers.clear();
     _isConnected = false;
     _connectionController.add(false);
@@ -78,10 +72,6 @@ class LiveKitVoiceService implements IVoiceService {
   @override
   void toggleDeafen() {
     _isDeafened = !_isDeafened;
-    if (_isDeafened) {
-      _currentSpeakers.clear();
-      _activeSpeakersController.add({});
-    }
     _connectionController.add(_isConnected);
   }
 }

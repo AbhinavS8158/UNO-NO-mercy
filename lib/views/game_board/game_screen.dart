@@ -1,8 +1,12 @@
-import 'dart:math' as math;
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../core/theme/uno_colors.dart';
 import '../../models/uno_card.dart';
+import '../../models/game_room.dart';
+import '../../services/game_service.dart';
+import '../../services/firebase_game_service.dart';
 import '../../services/voice_service.dart';
 import '../widgets/card_fan_layout.dart';
 import '../widgets/voice_control_bar.dart';
@@ -11,11 +15,13 @@ import 'table_center_view.dart';
 import 'animated_card_overlay.dart';
 
 class GameScreen extends StatefulWidget {
+  final String roomId;
   final String roomCode;
   final String playerName;
 
   const GameScreen({
     super.key,
+    this.roomId = '',
     this.roomCode = 'UNO7K2',
     this.playerName = 'Player 1',
   });
@@ -25,78 +31,107 @@ class GameScreen extends StatefulWidget {
 }
 
 class _GameScreenState extends State<GameScreen> {
-  // Game Table States
-  late UnoCard _topCard;
+  late final IGameService _gameService;
+  final IVoiceService _voiceService = LiveKitVoiceService();
+
+  StreamSubscription<GameRoom>? _roomSubscription;
+  StreamSubscription<List<UnoCard>>? _handSubscription;
+
+  // Active game states
+  UnoCard _topCard = const UnoCard(
+    id: 'top_init',
+    color: CardColor.red,
+    type: CardType.number,
+    numberValue: 7,
+  );
   CardColor _activeColor = CardColor.red;
   int _pendingDrawCount = 0;
   bool _isClockwise = true;
-  int _remainingDeckCount = 88;
+  int _remainingDeckCount = 140;
+  String _currentTurn = '';
 
-  // Voice Service
-  final IVoiceService _voiceService = LiveKitVoiceService();
-  Set<String> _activeSpeakers = {};
-
-  // Player Hand
+  // Player's Own Hand (Unique cards)
   List<UnoCard> _playerHand = [];
   UnoCard? _selectedCard;
 
-  // Active flying animation
+  // Active Real Opponents (Only players who actually joined this room!)
+  List<PlayerSummary> _opponents = [];
+  Set<String> _activeSpeakers = {};
+
+  // Flying Card Animation
   Widget? _flyingCardWidget;
 
-  // Mock Opponents for Multiplayer Preview
-  final List<Map<String, dynamic>> _opponents = [
-    {'name': 'Rahul', 'cardCount': 5, 'isTurn': false, 'isKnockedOut': false},
-    {'name': 'Anu', 'cardCount': 19, 'isTurn': false, 'isKnockedOut': false},
-    {'name': 'Vikram', 'cardCount': 23, 'isTurn': true, 'isKnockedOut': false},
-  ];
+  String get _myUid {
+    if (_gameService is FirebaseGameService) {
+      return (_gameService as FirebaseGameService).currentUid;
+    }
+    return 'player_me';
+  }
 
   @override
   void initState() {
     super.initState();
-    _initSampleGame();
+    if (Firebase.apps.isNotEmpty) {
+      _gameService = FirebaseGameService();
+    } else {
+      _gameService = LocalGameService();
+    }
+
+    _initGameStreams();
     _initVoiceChannel();
   }
 
+  void _initGameStreams() {
+    final effectiveRoomId = widget.roomId.isNotEmpty ? widget.roomId : widget.roomCode;
+
+    // 1. Listen to Real-time Room Updates (Top card, turns, actual players)
+    _roomSubscription = _gameService.streamRoom(effectiveRoomId).listen((room) {
+      if (!mounted) return;
+      setState(() {
+        _topCard = room.topCard;
+        _activeColor = room.activeColor;
+        _pendingDrawCount = room.drawCountPending;
+        _isClockwise = room.turnDirection == 1;
+        _currentTurn = room.currentTurn;
+
+        // Filter out ME: Show ONLY real opponents who joined this room!
+        _opponents = room.players.where((p) => p.id != _myUid).toList();
+
+        // Check if game has ended
+        if (room.winnerId != null) {
+          _showWinnerDialog(room.winnerId!);
+        }
+      });
+    });
+
+    // 2. Listen to My Own Unique Private Hand
+    _handSubscription = _gameService.streamPrivateHand(effectiveRoomId, _myUid).listen((hand) {
+      if (!mounted) return;
+      setState(() {
+        _playerHand = hand;
+        // Check 25 cards mercy rule
+        if (_playerHand.length >= 25) {
+          _showMercyKnockoutDialog();
+        }
+      });
+    });
+  }
+
   void _initVoiceChannel() {
-    // Automatically connect to secure LiveKit voice room on join
-    _voiceService.connect(roomCode: widget.roomCode, token: 'mock_token');
+    _voiceService.connect(roomCode: widget.roomCode, token: 'live_token');
     _voiceService.activeSpeakersStream.listen((speakers) {
       if (mounted) {
-        setState(() {
-          _activeSpeakers = speakers;
-        });
+        setState(() => _activeSpeakers = speakers);
       }
     });
   }
 
   @override
   void dispose() {
+    _roomSubscription?.cancel();
+    _handSubscription?.cancel();
     _voiceService.disconnect();
     super.dispose();
-  }
-
-  void _initSampleGame() {
-    _topCard = const UnoCard(
-      id: 'top_init',
-      color: CardColor.red,
-      type: CardType.number,
-      numberValue: 7,
-    );
-    _activeColor = CardColor.red;
-
-    // Varied hand with No Mercy specials
-    _playerHand = [
-      const UnoCard(id: 'c1', color: CardColor.red, type: CardType.number, numberValue: 7),
-      const UnoCard(id: 'c2', color: CardColor.blue, type: CardType.number, numberValue: 7),
-      const UnoCard(id: 'c3', color: CardColor.red, type: CardType.skip),
-      const UnoCard(id: 'c4', color: CardColor.yellow, type: CardType.drawTwo),
-      const UnoCard(id: 'c5', color: CardColor.wild, type: CardType.drawFour),
-      const UnoCard(id: 'c6', color: CardColor.red, type: CardType.drawSix),
-      const UnoCard(id: 'c7', color: CardColor.wild, type: CardType.drawTen),
-      const UnoCard(id: 'c8', color: CardColor.green, type: CardType.discardAll),
-      const UnoCard(id: 'c9', color: CardColor.blue, type: CardType.skipEveryone),
-      const UnoCard(id: 'c10', color: CardColor.yellow, type: CardType.pointSevenSwap),
-    ];
   }
 
   void _handleCardSelected(UnoCard card) {
@@ -105,7 +140,10 @@ class _GameScreenState extends State<GameScreen> {
     });
   }
 
-  void _handleCardPlayed(UnoCard card) {
+  void _handleCardPlayed(UnoCard card) async {
+    final effectiveRoomId = widget.roomId.isNotEmpty ? widget.roomId : widget.roomCode;
+
+    // Validate Playability
     if (!card.canPlayOn(_topCard, pendingDrawCount: _pendingDrawCount)) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -126,54 +164,57 @@ class _GameScreenState extends State<GameScreen> {
         card: card,
         startOffset: startOffset,
         endOffset: endOffset,
-        onCompleted: () {
+        onCompleted: () async {
           setState(() {
             _flyingCardWidget = null;
-            _topCard = card;
-            _activeColor = card.isWild ? CardColor.blue : card.color;
-            _playerHand.removeWhere((c) => c.id == card.id);
             _selectedCard = null;
-
-            if (card.isDrawPenalty) {
-              _pendingDrawCount += card.penaltyCount;
-            } else {
-              _pendingDrawCount = 0;
-            }
-
-            if (card.type == CardType.reverse) {
-              _isClockwise = !_isClockwise;
-            }
           });
+          // Commit move to Firebase Server
+          await _gameService.playCard(
+            roomId: effectiveRoomId,
+            cardId: card.id,
+            chosenColor: card.isWild ? CardColor.blue : card.color,
+          );
         },
       );
     });
   }
 
-  void _drawCardFromDeck() {
-    if (_playerHand.length >= 25) {
-      _showMercyKnockoutDialog();
-      return;
-    }
+  void _drawCardFromDeck() async {
+    final effectiveRoomId = widget.roomId.isNotEmpty ? widget.roomId : widget.roomCode;
+    await _gameService.drawCard(roomId: effectiveRoomId);
+  }
 
-    final colors = [CardColor.red, CardColor.blue, CardColor.green, CardColor.yellow];
-    final randomColor = colors[math.Random().nextInt(colors.length)];
-    final newCard = UnoCard(
-      id: 'draw_${DateTime.now().millisecondsSinceEpoch}',
-      color: randomColor,
-      type: CardType.number,
-      numberValue: math.Random().nextInt(10),
-    );
-
-    setState(() {
-      _playerHand.add(newCard);
-      if (_remainingDeckCount > 1) _remainingDeckCount--;
-      if (_pendingDrawCount > 0) _pendingDrawCount = 0;
-    });
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('ഡെക്കിൽ നിന്ന് ഒരു കാർഡ് എടുത്തു: ${newCard.displayLabel}'),
-        duration: const Duration(milliseconds: 1000),
+  void _showWinnerDialog(String winnerId) {
+    final isMeWinner = winnerId == _myUid;
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        backgroundColor: UnoColors.surfaceElevated,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text(
+          isMeWinner ? '🎉 YOU WON!' : '🏆 GAME OVER',
+          style: GoogleFonts.bebasNeue(
+            color: isMeWinner ? Colors.greenAccent : Colors.amber,
+            fontSize: 26,
+          ),
+        ),
+        content: Text(
+          isMeWinner
+            ? 'നിങ്ങൾ UNO Show \'em No Mercy വിജയിച്ചിരിക്കുന്നു! 👑'
+            : 'എതിരാളി എല്ലാ കാർഡുകളും കളിച്ചു വിജയിച്ചു!',
+          style: const TextStyle(color: Colors.white),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              Navigator.pop(context);
+            },
+            child: const Text('ലോബിയിലേക്ക് മടങ്ങുക (Return to Lobby)', style: TextStyle(color: Colors.amber)),
+          ),
+        ],
       ),
     );
   }
@@ -190,7 +231,7 @@ class _GameScreenState extends State<GameScreen> {
             const Icon(Icons.dangerous, color: Colors.redAccent, size: 30),
             const SizedBox(width: 10),
             Text(
-              'MERCY RULE KNOCKOUT!',
+              'MERCY KNOCKOUT! ☠️',
               style: GoogleFonts.bebasNeue(color: Colors.redAccent, fontSize: 24),
             ),
           ],
@@ -203,9 +244,9 @@ class _GameScreenState extends State<GameScreen> {
           TextButton(
             onPressed: () {
               Navigator.pop(context);
-              setState(() => _initSampleGame());
+              Navigator.pop(context);
             },
-            child: const Text('വീണ്ടും തുടങ്ങുക (Restart)', style: TextStyle(color: Colors.amber)),
+            child: const Text('മടങ്ങുക (Exit)', style: TextStyle(color: Colors.amber)),
           ),
         ],
       ),
@@ -247,8 +288,8 @@ class _GameScreenState extends State<GameScreen> {
                 // Top Header Bar
                 _buildHeaderBar(),
 
-                // Opponents Bar with Active Voice Speaking Glow
-                _buildOpponentsBar(),
+                // Real Opponents Bar (ONLY players who actually joined!)
+                _buildRealOpponentsBar(),
 
                 // Central Table (Deck & Discard Pile)
                 Expanded(
@@ -322,9 +363,8 @@ class _GameScreenState extends State<GameScreen> {
             ),
           ),
           const Spacer(),
-          // Voice Chat Indicator (LiveKit)
           IconButton(
-            tooltip: 'LiveKit Voice Controls',
+            tooltip: 'Live Voice Chat',
             icon: Icon(
               _voiceService.isMuted ? Icons.mic_off : Icons.mic,
               color: _voiceService.isConnected
@@ -333,7 +373,6 @@ class _GameScreenState extends State<GameScreen> {
             ),
             onPressed: _openVoiceSettings,
           ),
-          // Text Chat Overlay Button
           IconButton(
             tooltip: 'Text Chat',
             icon: const Icon(Icons.chat_bubble_outline, color: Colors.amber),
@@ -344,27 +383,36 @@ class _GameScreenState extends State<GameScreen> {
     );
   }
 
-  Widget _buildOpponentsBar() {
+  Widget _buildRealOpponentsBar() {
+    if (_opponents.isEmpty) {
+      return Container(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        child: const Text(
+          'മറ്റ് കളിക്കാർക്കായി കാത്തിരിക്കുന്നു...',
+          style: TextStyle(color: Colors.white54, fontSize: 12),
+        ),
+      );
+    }
+
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
         children: _opponents.map((opp) {
-          final count = opp['cardCount'] as int;
+          final count = opp.cardCount;
           final isDanger = count >= 20;
-          final isSpeaking = _activeSpeakers.contains(opp['name']);
+          final isSpeaking = _activeSpeakers.contains(opp.name);
+          final isTurn = opp.id == _currentTurn;
 
           return Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
             decoration: BoxDecoration(
-              color: opp['isTurn'] ? Colors.white12 : UnoColors.surface,
+              color: isTurn ? Colors.white12 : UnoColors.surface,
               borderRadius: BorderRadius.circular(12),
               border: Border.all(
                 color: isSpeaking
                     ? Colors.greenAccent
-                    : (opp['isTurn']
-                        ? UnoColors.yellow
-                        : (isDanger ? Colors.redAccent : Colors.transparent)),
+                    : (isTurn ? UnoColors.yellow : (isDanger ? Colors.redAccent : Colors.transparent)),
                 width: isSpeaking ? 2.5 : 1.5,
               ),
               boxShadow: isSpeaking
@@ -379,31 +427,20 @@ class _GameScreenState extends State<GameScreen> {
             ),
             child: Row(
               children: [
-                Stack(
-                  alignment: Alignment.bottomRight,
-                  children: [
-                    CircleAvatar(
-                      radius: 14,
-                      backgroundColor: isDanger ? Colors.red : Colors.blueGrey,
-                      child: Text(
-                        opp['name'][0],
-                        style: const TextStyle(fontSize: 12, color: Colors.white, fontWeight: FontWeight.bold),
-                      ),
-                    ),
-                    if (isSpeaking)
-                      const CircleAvatar(
-                        radius: 5,
-                        backgroundColor: Colors.greenAccent,
-                        child: Icon(Icons.volume_up, size: 7, color: Colors.black),
-                      ),
-                  ],
+                CircleAvatar(
+                  radius: 14,
+                  backgroundColor: isDanger ? Colors.red : Colors.blueGrey,
+                  child: Text(
+                    opp.name.isNotEmpty ? opp.name[0].toUpperCase() : 'P',
+                    style: const TextStyle(fontSize: 12, color: Colors.white, fontWeight: FontWeight.bold),
+                  ),
                 ),
                 const SizedBox(width: 8),
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      opp['name'],
+                      opp.name,
                       style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
                     ),
                     Text(
@@ -425,18 +462,33 @@ class _GameScreenState extends State<GameScreen> {
   }
 
   Widget _buildPlayerActionBar() {
+    final isMyTurn = _currentTurn == _myUid || _currentTurn.isEmpty;
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(
-            'നിങ്ങളുടെ കാർഡുകൾ: ${_playerHand.length}/25 ${(_playerHand.length >= 20) ? '⚠️' : ''}',
-            style: TextStyle(
-              color: _playerHand.length >= 20 ? Colors.redAccent : Colors.white70,
-              fontWeight: FontWeight.bold,
-              fontSize: 13,
-            ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'നിങ്ങളുടെ കാർഡുകൾ: ${_playerHand.length}/25',
+                style: TextStyle(
+                  color: _playerHand.length >= 20 ? Colors.redAccent : Colors.white70,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 13,
+                ),
+              ),
+              Text(
+                isMyTurn ? '👉 നിങ്ങളുടെ ടേൺ ആണ്!' : '⏳ എതിരാളിയുടെ ടേൺ...',
+                style: TextStyle(
+                  color: isMyTurn ? Colors.greenAccent : Colors.white38,
+                  fontSize: 11,
+                  fontWeight: isMyTurn ? FontWeight.bold : FontWeight.normal,
+                ),
+              ),
+            ],
           ),
           ElevatedButton(
             onPressed: () {

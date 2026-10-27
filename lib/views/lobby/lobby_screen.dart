@@ -66,6 +66,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
           context,
           MaterialPageRoute(
             builder: (context) => GameScreen(
+              roomId: room.id,
               roomCode: room.roomCode,
               playerName: _nameController.text.trim().isEmpty ? 'Player' : _nameController.text.trim(),
             ),
@@ -125,6 +126,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
       context,
       MaterialPageRoute(
         builder: (context) => GameScreen(
+          roomId: _currentRoomId!,
           roomCode: _currentRoomCode ?? 'UNO7K2',
           playerName: _nameController.text.trim().isEmpty ? 'Player 1' : _nameController.text.trim(),
         ),
