@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../core/theme/uno_colors.dart';
 import '../../services/game_service.dart';
+import '../../services/firebase_game_service.dart';
 import '../game_board/game_screen.dart';
 
 class LobbyScreen extends StatefulWidget {
@@ -15,7 +17,18 @@ class LobbyScreen extends StatefulWidget {
 class _LobbyScreenState extends State<LobbyScreen> {
   final TextEditingController _nameController = TextEditingController(text: 'Player 1');
   final TextEditingController _codeController = TextEditingController();
-  final IGameService _gameService = LocalGameService();
+  late final IGameService _gameService;
+
+  @override
+  void initState() {
+    super.initState();
+    // Use Live Cloud Firestore if Firebase is initialized, else local
+    if (Firebase.apps.isNotEmpty) {
+      _gameService = FirebaseGameService();
+    } else {
+      _gameService = LocalGameService();
+    }
+  }
 
   String? _currentRoomCode;
   String? _currentRoomId;
