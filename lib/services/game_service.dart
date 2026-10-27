@@ -172,11 +172,22 @@ class LocalGameService implements IGameService {
     final card = hand[cardIndex];
     hand.removeAt(cardIndex);
 
+    final activePlayers = room.players;
+    int curIdx = activePlayers.indexWhere((p) => p.id == currentUserId);
+    if (curIdx == -1) curIdx = 0;
+    String nextTurnId = currentUserId;
+    if (card.type == CardType.skipEveryone) {
+      nextTurnId = currentUserId; // Skip Everyone: play continuously!
+    } else if (activePlayers.length > 1) {
+      int nextIdx = (curIdx + 1) % activePlayers.length;
+      nextTurnId = activePlayers[nextIdx].id;
+    }
+
     final updatedRoom = GameRoom(
       id: roomId,
       roomCode: room.roomCode,
       status: room.status,
-      currentTurn: room.currentTurn,
+      currentTurn: nextTurnId,
       turnDirection: room.turnDirection,
       topCard: card,
       activeColor: chosenColor ?? (card.isWild ? CardColor.blue : card.color),

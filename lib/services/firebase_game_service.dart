@@ -161,6 +161,12 @@ class FirebaseGameService implements IGameService {
       if (!roomSnap.exists) return;
       final roomData = roomSnap.data()!;
 
+      // STRICT TURN ENFORCEMENT: Only currentTurn player can play!
+      final currentTurn = roomData['currentTurn'] as String?;
+      if (currentTurn != null && currentTurn.isNotEmpty && currentTurn != uid) {
+        return; // Reject play if not player's turn
+      }
+
       // 1. Retrieve player's hand
       final handRef = roomRef.collection('private_hands').doc(uid);
       final handSnap = await transaction.get(handRef);
@@ -284,6 +290,12 @@ class FirebaseGameService implements IGameService {
       final roomSnap = await transaction.get(roomRef);
       if (!roomSnap.exists) return;
       final roomData = roomSnap.data()!;
+
+      // STRICT TURN ENFORCEMENT: Only currentTurn player can draw!
+      final currentTurn = roomData['currentTurn'] as String?;
+      if (currentTurn != null && currentTurn.isNotEmpty && currentTurn != uid) {
+        return; // Reject draw if not player's turn
+      }
 
       // Stacking Rule: If penalty is accumulated (e.g. +4, +6, +10 = 20),
       // the targeted player MUST draw ALL accumulated cards!

@@ -219,12 +219,47 @@ class _GameScreenState extends State<GameScreen> {
   }
 
   void _handleCardSelected(UnoCard card) {
+    final isMyTurn = _currentTurn == _myUid || _currentTurn.isEmpty;
+    if (!isMyTurn) {
+      String activePlayerName = 'Opponent';
+      final activeMatch = _allPlayers.where((p) => p.id == _currentTurn);
+      if (activeMatch.isNotEmpty) {
+        activePlayerName = activeMatch.first.name;
+      }
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('ഇപ്പോൾ $activePlayerName-ന്റെ ടേൺ ആണ്! നിങ്ങളുടെ ടേൺ ആകുമ്പോൾ മാത്രമേ കാർഡ് വെക്കാൻ സാധിക്കൂ.'),
+          backgroundColor: Colors.redAccent,
+          duration: const Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
     setState(() {
       _selectedCard = (_selectedCard?.id == card.id) ? null : card;
     });
   }
 
   void _handleCardPlayed(UnoCard card) async {
+    final isMyTurn = _currentTurn == _myUid || _currentTurn.isEmpty;
+    if (!isMyTurn) {
+      String activePlayerName = 'Opponent';
+      final activeMatch = _allPlayers.where((p) => p.id == _currentTurn);
+      if (activeMatch.isNotEmpty) {
+        activePlayerName = activeMatch.first.name;
+      }
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('ഇപ്പോൾ $activePlayerName-ന്റെ ടേൺ ആണ്! കാർഡ് വെക്കാൻ കഴിയില്ല.'),
+          backgroundColor: Colors.redAccent,
+          duration: const Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
+
     final effectiveRoomId = widget.roomId.isNotEmpty ? widget.roomId : widget.roomCode;
 
     // Validate Playability
@@ -274,6 +309,17 @@ class _GameScreenState extends State<GameScreen> {
             chosenColor: chosenColor,
             swapTargetPlayerId: swapTargetPlayerId,
           );
+
+          if (card.type == CardType.skipEveryone && mounted) {
+            ScaffoldMessenger.of(context).hideCurrentSnackBar();
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('⚡ SKIP EVERYONE! ബാക്കി എല്ലാവരെയും സ്കിപ്പ് ചെയ്തു. നിങ്ങൾ വീണ്ടും കളിക്കുക!'),
+                backgroundColor: Colors.amber,
+                duration: Duration(seconds: 2),
+              ),
+            );
+          }
         },
       );
     });
@@ -582,6 +628,7 @@ class _GameScreenState extends State<GameScreen> {
                   selectedCard: _selectedCard,
                   topCard: _topCard,
                   pendingDrawCount: _pendingDrawCount,
+                  isMyTurn: _currentTurn == _myUid || _currentTurn.isEmpty,
                   onCardSelected: _handleCardSelected,
                   onCardPlayed: _handleCardPlayed,
                 ),

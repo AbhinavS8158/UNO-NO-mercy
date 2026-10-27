@@ -9,6 +9,7 @@ class CardFanLayout extends StatefulWidget {
   final Function(UnoCard card) onCardPlayed;
   final UnoCard? topCard;
   final int pendingDrawCount;
+  final bool isMyTurn;
 
   const CardFanLayout({
     super.key,
@@ -18,6 +19,7 @@ class CardFanLayout extends StatefulWidget {
     required this.onCardPlayed,
     this.topCard,
     this.pendingDrawCount = 0,
+    this.isMyTurn = true,
   });
 
   @override
@@ -76,11 +78,12 @@ class _CardFanLayoutState extends State<CardFanLayout> {
                 final offsetFromCenter = index - centerIndex;
                 final angle = (offsetFromCenter * 0.035).clamp(-0.25, 0.25);
 
-                final isPlayable = widget.topCard == null ||
-                    card.canPlayOn(
-                      widget.topCard!,
-                      pendingDrawCount: widget.pendingDrawCount,
-                    );
+                final isPlayable = widget.isMyTurn &&
+                    (widget.topCard == null ||
+                        card.canPlayOn(
+                          widget.topCard!,
+                          pendingDrawCount: widget.pendingDrawCount,
+                        ));
 
                 return Positioned(
                   left: index * overlapSpacing,
@@ -88,7 +91,7 @@ class _CardFanLayoutState extends State<CardFanLayout> {
                   child: Transform.rotate(
                     angle: isSelected ? 0.0 : angle,
                     child: Opacity(
-                      opacity: isPlayable ? 1.0 : 0.65,
+                      opacity: isPlayable ? 1.0 : 0.55,
                       child: UnoCardWidget(
                         card: card,
                         width: cardWidth,
@@ -96,6 +99,10 @@ class _CardFanLayoutState extends State<CardFanLayout> {
                         isSelected: isSelected,
                         isPlayable: isPlayable,
                         onTap: () {
+                          if (!widget.isMyTurn) {
+                            widget.onCardSelected(card);
+                            return;
+                          }
                           if (isSelected) {
                             // Double tap/click or tap when selected plays the card
                             widget.onCardPlayed(card);
