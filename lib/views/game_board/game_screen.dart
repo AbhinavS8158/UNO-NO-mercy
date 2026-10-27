@@ -69,6 +69,7 @@ class _GameScreenState extends State<GameScreen> {
   UnoCard? _selectedCard;
 
   // Active Real Opponents (Only players who actually joined this room!)
+  List<PlayerSummary> _allPlayers = [];
   List<PlayerSummary> _opponents = [];
   Set<String> _activeSpeakers = {};
 
@@ -107,6 +108,9 @@ class _GameScreenState extends State<GameScreen> {
         _pendingDrawCount = room.drawCountPending;
         _isClockwise = room.turnDirection == 1;
         _currentTurn = room.currentTurn;
+
+        // Keep full list of players in room
+        _allPlayers = room.players;
 
         // Filter out ME: Show ONLY real opponents who joined this room!
         _opponents = room.players.where((p) => p.id != _myUid).toList();
@@ -719,9 +723,35 @@ class _GameScreenState extends State<GameScreen> {
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      opp.name,
-                      style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                    Row(
+                      children: [
+                        Text(
+                          opp.name,
+                          style: TextStyle(
+                            color: isTurn ? UnoColors.yellow : Colors.white,
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        if (isTurn) ...[
+                          const SizedBox(width: 4),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                            decoration: BoxDecoration(
+                              color: UnoColors.yellow,
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: const Text(
+                              'TURN',
+                              style: TextStyle(
+                                color: Colors.black,
+                                fontSize: 8,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
                     Text(
                       '$count Cards ${isDanger ? '⚠️' : ''}',
@@ -743,6 +773,11 @@ class _GameScreenState extends State<GameScreen> {
 
   Widget _buildPlayerActionBar() {
     final isMyTurn = _currentTurn == _myUid || _currentTurn.isEmpty;
+    String turnPlayerName = widget.playerName;
+    if (!isMyTurn) {
+      final activeMatch = _allPlayers.where((p) => p.id == _currentTurn);
+      turnPlayerName = activeMatch.isNotEmpty ? activeMatch.first.name : 'Opponent';
+    }
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
@@ -761,11 +796,13 @@ class _GameScreenState extends State<GameScreen> {
                 ),
               ),
               Text(
-                isMyTurn ? '👉 നിങ്ങളുടെ ടേൺ ആണ്!' : '⏳ എതിരാളിയുടെ ടേൺ...',
+                isMyTurn
+                    ? '👉 നിങ്ങളുടെ ടേൺ ആണ്! (${widget.playerName})'
+                    : '⏳ $turnPlayerName-ന്റെ ടേൺ ആണ്...',
                 style: TextStyle(
-                  color: isMyTurn ? Colors.greenAccent : Colors.white38,
-                  fontSize: 11,
-                  fontWeight: isMyTurn ? FontWeight.bold : FontWeight.normal,
+                  color: isMyTurn ? Colors.greenAccent : Colors.amberAccent,
+                  fontSize: 12,
+                  fontWeight: isMyTurn ? FontWeight.bold : FontWeight.w600,
                 ),
               ),
             ],
