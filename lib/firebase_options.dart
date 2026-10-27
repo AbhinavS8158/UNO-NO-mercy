@@ -1,8 +1,8 @@
 import 'package:firebase_core/firebase_core.dart' show FirebaseOptions;
 import 'package:flutter/foundation.dart' show defaultTargetPlatform, kIsWeb, TargetPlatform;
 
-/// Default [FirebaseOptions] for use with your Firebase apps.
-/// Replace these values with your actual Firebase Project config from console.firebase.google.com
+/// Default [FirebaseOptions] for UNO Show 'em No Mercy
+/// Connected to live Firebase project: uno-no-mercy-81afc
 class DefaultFirebaseOptions {
   static FirebaseOptions get currentPlatform {
     if (kIsWeb) {
@@ -16,21 +16,23 @@ class DefaultFirebaseOptions {
     }
   }
 
-  // Web Firebase configuration for UNO No Mercy
+  // Live Web Firebase configuration
   static const FirebaseOptions web = FirebaseOptions(
-    apiKey: 'AIzaSyDemoKeyUnoNoMercy1234567890',
-    appId: '1:1020651641252:web:demoappuno',
-    messagingSenderId: '1020651641252',
-    projectId: 'uno-no-mercy-live',
-    authDomain: 'uno-no-mercy-live.firebaseapp.com',
-    storageBucket: 'uno-no-mercy-live.appspot.com',
+    apiKey: 'AIzaSyBrCT-KaYpaGr1c9FVcijXCszQ9P_LVmJM',
+    authDomain: 'uno-no-mercy-81afc.firebaseapp.com',
+    projectId: 'uno-no-mercy-81afc',
+    storageBucket: 'uno-no-mercy-81afc.firebasestorage.app',
+    messagingSenderId: '228669985780',
+    appId: '1:228669985780:web:f8fe89e54ce3ad37429fa1',
+    measurementId: 'G-TNBZ3TRT4F',
   );
 
   static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'AIzaSyDemoKeyUnoNoMercy1234567890',
-    appId: '1:1020651641252:android:demoappuno',
-    messagingSenderId: '1020651641252',
-    projectId: 'uno-no-mercy-live',
-    storageBucket: 'uno-no-mercy-live.appspot.com',
+    apiKey: 'AIzaSyBrCT-KaYpaGr1c9FVcijXCszQ9P_LVmJM',
+    authDomain: 'uno-no-mercy-81afc.firebaseapp.com',
+    projectId: 'uno-no-mercy-81afc',
+    storageBucket: 'uno-no-mercy-81afc.firebasestorage.app',
+    messagingSenderId: '228669985780',
+    appId: '1:228669985780:web:f8fe89e54ce3ad37429fa1',
   );
 }

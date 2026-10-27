@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -37,6 +38,43 @@ class _LobbyScreenState extends State<LobbyScreen> {
 
   final List<String> _joinedPlayers = [];
 
+  StreamSubscription? _roomSubscription;
+
+  @override
+  void dispose() {
+    _roomSubscription?.cancel();
+    _nameController.dispose();
+    _codeController.dispose();
+    super.dispose();
+  }
+
+  void _listenToRoomUpdates(String roomId) {
+    _roomSubscription?.cancel();
+    _roomSubscription = _gameService.streamRoom(roomId).listen((room) {
+      if (!mounted) return;
+      setState(() {
+        _joinedPlayers.clear();
+        for (var p in room.players) {
+          _joinedPlayers.add('${p.name} ${p.isHost ? '(Host 👑)' : ''}');
+        }
+      });
+
+      // If host started the game, automatically take joined players to the GameScreen!
+      if (room.status == 'in_progress') {
+        _roomSubscription?.cancel();
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (context) => GameScreen(
+              roomCode: room.roomCode,
+              playerName: _nameController.text.trim().isEmpty ? 'Player' : _nameController.text.trim(),
+            ),
+          ),
+        );
+      }
+    });
+  }
+
   void _handleCreateRoom() async {
     if (_nameController.text.trim().isEmpty) return;
 
@@ -49,9 +87,8 @@ class _LobbyScreenState extends State<LobbyScreen> {
       setState(() {
         _currentRoomId = res['roomId'];
         _currentRoomCode = res['roomCode'];
-        _joinedPlayers.clear();
-        _joinedPlayers.add('${_nameController.text.trim()} (Host 👑)');
       });
+      _listenToRoomUpdates(_currentRoomId!);
     } catch (e) {
       _showError(e.toString());
     } finally {
@@ -71,8 +108,8 @@ class _LobbyScreenState extends State<LobbyScreen> {
       setState(() {
         _currentRoomId = res['roomId'];
         _currentRoomCode = res['roomCode'];
-        _joinedPlayers.add('${_nameController.text.trim()} (You)');
       });
+      _listenToRoomUpdates(_currentRoomId!);
     } catch (e) {
       _showError('റൂം കോഡ് തെറ്റാണ് അല്ലെങ്കിൽ റൂം നിലവിലില്ല!');
     } finally {
@@ -80,7 +117,10 @@ class _LobbyScreenState extends State<LobbyScreen> {
     }
   }
 
-  void _handleStartGame() {
+  void _handleStartGame() async {
+    if (_currentRoomId == null) return;
+    await _gameService.startGame(roomId: _currentRoomId!);
+    if (!mounted) return;
     Navigator.push(
       context,
       MaterialPageRoute(
