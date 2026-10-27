@@ -108,6 +108,7 @@ class _GameScreenState extends State<GameScreen> {
         _pendingDrawCount = room.drawCountPending;
         _isClockwise = room.turnDirection == 1;
         _currentTurn = room.currentTurn;
+        _remainingDeckCount = room.remainingDeckCount;
 
         // Keep full list of players in room
         _allPlayers = room.players;
@@ -425,6 +426,7 @@ class _GameScreenState extends State<GameScreen> {
 
     setState(() {
       _selectedCard = null;
+      _remainingDeckCount = (_remainingDeckCount - countBeingDrawn).clamp(0, 999);
       _flyingCardWidget = FlyingCardAnimation(
         card: const UnoCard(id: 'flying_drawn', color: CardColor.wild, type: CardType.number),
         startOffset: startOffset,

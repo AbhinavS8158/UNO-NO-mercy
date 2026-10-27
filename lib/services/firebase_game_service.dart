@@ -63,6 +63,7 @@ class FirebaseGameService implements IGameService {
       'topCard': _cardToMap(startingTopCard),
       'activeColor': startingTopCard.color.name.toUpperCase(),
       'drawCountPending': 0,
+      'remainingDeckCount': remainingDeck.length,
       'players': [hostPlayer.toMap()],
       'gameRules': rules,
       'winnerId': null,
@@ -131,6 +132,7 @@ class FirebaseGameService implements IGameService {
 
       await roomDoc.reference.update({
         'players': FieldValue.arrayUnion([newPlayer.toMap()]),
+        'remainingDeckCount': remainingDeck.length,
         'updatedAt': FieldValue.serverTimestamp(),
       });
     }
@@ -354,6 +356,7 @@ class FirebaseGameService implements IGameService {
         'players': updatedPlayers,
         'drawCountPending': 0, // Penalty consumed!
         'currentTurn': nextTurnId,
+        'remainingDeckCount': remainingDeck.length,
         if (winnerId != null) 'winnerId': winnerId,
         if (winnerId != null) 'status': 'ended',
         'updatedAt': FieldValue.serverTimestamp(),

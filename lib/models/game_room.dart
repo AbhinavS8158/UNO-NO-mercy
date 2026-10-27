@@ -49,6 +49,7 @@ class GameRoom {
   final UnoCard topCard;
   final CardColor activeColor;
   final int drawCountPending;
+  final int remainingDeckCount;
   final List<PlayerSummary> players;
   final String? winnerId;
   final Map<String, dynamic>? lastUnoCall;
@@ -62,6 +63,7 @@ class GameRoom {
     required this.topCard,
     required this.activeColor,
     required this.drawCountPending,
+    this.remainingDeckCount = 140,
     required this.players,
     this.winnerId,
     this.lastUnoCall,
@@ -124,6 +126,7 @@ class GameRoom {
       topCard: topCard,
       activeColor: parseColor(map['activeColor']),
       drawCountPending: map['drawCountPending'] ?? 0,
+      remainingDeckCount: (map['remainingDeckCount'] as int?) ?? 140,
       players: players,
       winnerId: map['winnerId'],
       lastUnoCall: map['lastUnoCall'] as Map<String, dynamic>?,

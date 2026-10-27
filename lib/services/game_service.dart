@@ -80,6 +80,7 @@ class LocalGameService implements IGameService {
       topCard: const UnoCard(id: 't1', color: CardColor.red, type: CardType.number, numberValue: 7),
       activeColor: CardColor.red,
       drawCountPending: 0,
+      remainingDeckCount: 154,
       players: [host],
     );
 
@@ -228,6 +229,7 @@ class LocalGameService implements IGameService {
         topCard: room.topCard,
         activeColor: room.activeColor,
         drawCountPending: 0, // penalty consumed
+        remainingDeckCount: (room.remainingDeckCount - countToDraw).clamp(0, 999),
         players: room.players
             .map((p) => p.id == currentUserId
                 ? PlayerSummary(
