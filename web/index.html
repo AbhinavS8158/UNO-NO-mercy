@@ -31,6 +31,29 @@
 
   <title>uno_no_mercy</title>
   <link rel="manifest" href="manifest.json">
+  <script>
+    window.initVoiceMicrophone = async function() {
+      try {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+          console.warn("getUserMedia not supported");
+          return false;
+        }
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        window.localVoiceStream = stream;
+        return true;
+      } catch (err) {
+        console.warn("Microphone error:", err);
+        return false;
+      }
+    };
+    window.toggleVoiceMute = function(isMuted) {
+      if (window.localVoiceStream) {
+        window.localVoiceStream.getAudioTracks().forEach(function(track) {
+          track.enabled = !isMuted;
+        });
+      }
+    };
+  </script>
 </head>
 <body>
   <!--

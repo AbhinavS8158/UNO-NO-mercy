@@ -1,6 +1,7 @@
 import 'dart:async';
 import '../models/game_room.dart';
 import '../models/uno_card.dart';
+import '../models/chat_message.dart';
 
 abstract class IGameService {
   Future<Map<String, String>> createRoom({required String playerName, String rules = 'no_mercy'});
@@ -17,6 +18,12 @@ abstract class IGameService {
   Stream<GameRoom> streamRoom(String roomId);
   Stream<List<UnoCard>> streamPrivateHand(String roomId, String myUserId);
   Future<String> getLiveKitVoiceToken(String roomId);
+  Future<void> sendChatMessage({
+    required String roomId,
+    required String senderName,
+    required String text,
+  });
+  Stream<List<ChatMessage>> streamChatMessages(String roomId);
 }
 
 /// Robust Local Simulation & Fallback Service
@@ -183,6 +190,31 @@ class LocalGameService implements IGameService {
   @override
   Future<String> getLiveKitVoiceToken(String roomId) async {
     return 'mock_livekit_token_$roomId';
+  }
+
+  final _chatController = StreamController<List<ChatMessage>>.broadcast();
+  final List<ChatMessage> _mockChatList = [];
+
+  @override
+  Future<void> sendChatMessage({
+    required String roomId,
+    required String senderName,
+    required String text,
+  }) async {
+    final msg = ChatMessage(
+      id: 'chat_${DateTime.now().millisecondsSinceEpoch}',
+      senderId: currentUserId,
+      senderName: senderName,
+      text: text,
+      timestamp: DateTime.now(),
+    );
+    _mockChatList.add(msg);
+    _chatController.add(List.from(_mockChatList));
+  }
+
+  @override
+  Stream<List<ChatMessage>> streamChatMessages(String roomId) {
+    return _chatController.stream;
   }
 }
 

@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
+import 'voice_platform.dart';
 
 abstract class IVoiceService {
   bool get isConnected;
@@ -43,12 +44,18 @@ class LiveKitVoiceService implements IVoiceService {
 
   @override
   Future<void> connect({required String roomCode, required String token}) async {
+    try {
+      initMicrophone();
+    } catch (e) {
+      debugPrint('Voice mic note: $e');
+    }
+
     _isConnected = true;
+    _isMuted = false;
     _connectionController.add(true);
 
-    // Active speaking level detection loop
     _speakerMonitorTimer?.cancel();
-    _speakerMonitorTimer = Timer.periodic(const Duration(seconds: 4), (timer) {
+    _speakerMonitorTimer = Timer.periodic(const Duration(seconds: 3), (timer) {
       if (!_isConnected || _isDeafened) return;
       _activeSpeakersController.add(Set.from(_currentSpeakers));
     });
@@ -57,6 +64,9 @@ class LiveKitVoiceService implements IVoiceService {
   @override
   Future<void> disconnect() async {
     _speakerMonitorTimer?.cancel();
+    try {
+      toggleMicMute(true);
+    } catch (_) {}
     _currentSpeakers.clear();
     _isConnected = false;
     _connectionController.add(false);
@@ -66,6 +76,9 @@ class LiveKitVoiceService implements IVoiceService {
   @override
   void toggleMute() {
     _isMuted = !_isMuted;
+    try {
+      toggleMicMute(_isMuted);
+    } catch (_) {}
     _connectionController.add(_isConnected);
   }
 

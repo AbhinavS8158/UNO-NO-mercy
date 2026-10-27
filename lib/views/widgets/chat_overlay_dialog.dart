@@ -2,15 +2,20 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../core/theme/uno_colors.dart';
 import '../../models/chat_message.dart';
+import '../../services/game_service.dart';
 
 class ChatOverlayDialog extends StatefulWidget {
+  final String roomId;
   final String roomCode;
   final String currentUserName;
+  final IGameService gameService;
 
   const ChatOverlayDialog({
     super.key,
+    required this.roomId,
     required this.roomCode,
     required this.currentUserName,
+    required this.gameService,
   });
 
   @override
@@ -21,23 +26,6 @@ class _ChatOverlayDialogState extends State<ChatOverlayDialog> {
   final TextEditingController _textController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
 
-  final List<ChatMessage> _messages = [
-    ChatMessage(
-      id: 'm1',
-      senderId: 'vikram',
-      senderName: 'Vikram',
-      text: 'കളി തുടങ്ങി! No Mercy ആണ് സൂക്ഷിച്ചോ! 🔥',
-      timestamp: DateTime.now().subtract(const Duration(minutes: 2)),
-    ),
-    ChatMessage(
-      id: 'm2',
-      senderId: 'anu',
-      senderName: 'Anu',
-      text: 'ആരെങ്കിലും +10 എനിക്ക് ഇടരുത് പ്ലീസ് 😂',
-      timestamp: DateTime.now().subtract(const Duration(minutes: 1)),
-    ),
-  ];
-
   final List<String> _quickTaunts = [
     'NO MERCY! 😈',
     'TAKE +10! 🔥',
@@ -47,22 +35,16 @@ class _ChatOverlayDialogState extends State<ChatOverlayDialog> {
     'SWAP HANDS! ⇄',
   ];
 
-  void _sendMessage(String text, {bool isReaction = false}) {
-    if (text.trim().isEmpty) return;
+  void _sendMessage(String text) async {
+    final cleanText = text.trim();
+    if (cleanText.isEmpty) return;
 
-    final newMsg = ChatMessage(
-      id: 'msg_${DateTime.now().millisecondsSinceEpoch}',
-      senderId: 'self',
+    _textController.clear();
+    await widget.gameService.sendChatMessage(
+      roomId: widget.roomId.isNotEmpty ? widget.roomId : widget.roomCode,
       senderName: widget.currentUserName,
-      text: text.trim(),
-      timestamp: DateTime.now(),
-      isReaction: isReaction,
+      text: cleanText,
     );
-
-    setState(() {
-      _messages.add(newMsg);
-      _textController.clear();
-    });
 
     // Auto scroll down
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -78,6 +60,8 @@ class _ChatOverlayDialogState extends State<ChatOverlayDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final effectiveRoomId = widget.roomId.isNotEmpty ? widget.roomId : widget.roomCode;
+
     return Container(
       height: MediaQuery.of(context).size.height * 0.75,
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -104,7 +88,7 @@ class _ChatOverlayDialogState extends State<ChatOverlayDialog> {
               const Icon(Icons.forum_outlined, color: Colors.orangeAccent),
               const SizedBox(width: 10),
               Text(
-                'ROOM CHAT (${widget.roomCode})',
+                'LIVE ROOM CHAT (${widget.roomCode})',
                 style: GoogleFonts.bebasNeue(
                   color: Colors.white,
                   fontSize: 18,
@@ -121,51 +105,65 @@ class _ChatOverlayDialogState extends State<ChatOverlayDialog> {
 
           const Divider(color: Colors.white12),
 
-          // Messages List
+          // Live Firestore Messages Stream
           Expanded(
-            child: ListView.builder(
-              controller: _scrollController,
-              itemCount: _messages.length,
-              itemBuilder: (context, index) {
-                final msg = _messages[index];
-                final isMe = msg.senderId == 'self';
-
-                return Align(
-                  alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
-                  child: Container(
-                    margin: const EdgeInsets.symmetric(vertical: 4),
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    decoration: BoxDecoration(
-                      color: isMe ? UnoColors.blue : UnoColors.surface,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: isMe ? Colors.transparent : Colors.white12,
-                      ),
+            child: StreamBuilder<List<ChatMessage>>(
+              stream: widget.gameService.streamChatMessages(effectiveRoomId),
+              builder: (context, snapshot) {
+                final messages = snapshot.data ?? [];
+                if (messages.isEmpty) {
+                  return const Center(
+                    child: Text(
+                      'മെസ്സേജുകൾ ഒന്നുമില്ല. ആദ്യത്തെ മെസ്സേജ് അയക്കൂ!',
+                      style: TextStyle(color: Colors.white38, fontSize: 13),
                     ),
-                    child: Column(
-                      crossAxisAlignment:
-                          isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
-                      children: [
-                        if (!isMe)
-                          Text(
-                            msg.senderName,
-                            style: TextStyle(
-                              color: UnoColors.yellow,
-                              fontSize: 10,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        Text(
-                          msg.text,
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: msg.isReaction ? 16 : 13,
-                            fontWeight: msg.isReaction ? FontWeight.bold : FontWeight.normal,
+                  );
+                }
+
+                return ListView.builder(
+                  controller: _scrollController,
+                  itemCount: messages.length,
+                  itemBuilder: (context, index) {
+                    final msg = messages[index];
+                    final isMe = msg.senderName == widget.currentUserName;
+
+                    return Align(
+                      alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
+                      child: Container(
+                        margin: const EdgeInsets.symmetric(vertical: 4),
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: isMe ? UnoColors.blue : UnoColors.surface,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: isMe ? Colors.transparent : Colors.white12,
                           ),
                         ),
-                      ],
-                    ),
-                  ),
+                        child: Column(
+                          crossAxisAlignment:
+                              isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+                          children: [
+                            if (!isMe)
+                              Text(
+                                msg.senderName,
+                                style: const TextStyle(
+                                  color: UnoColors.yellow,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            Text(
+                              msg.text,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 14,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
                 );
               },
             ),
@@ -187,7 +185,7 @@ class _ChatOverlayDialogState extends State<ChatOverlayDialog> {
                           taunt,
                           style: const TextStyle(color: Colors.white, fontSize: 11),
                         ),
-                        onPressed: () => _sendMessage(taunt, isReaction: true),
+                        onPressed: () => _sendMessage(taunt),
                       ),
                     ),
                   )

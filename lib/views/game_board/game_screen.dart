@@ -5,6 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../core/theme/uno_colors.dart';
 import '../../models/uno_card.dart';
 import '../../models/game_room.dart';
+import '../../models/chat_message.dart';
 import '../../services/game_service.dart';
 import '../../services/firebase_game_service.dart';
 import '../../services/voice_service.dart';
@@ -36,6 +37,12 @@ class _GameScreenState extends State<GameScreen> {
 
   StreamSubscription<GameRoom>? _roomSubscription;
   StreamSubscription<List<UnoCard>>? _handSubscription;
+  StreamSubscription<List<ChatMessage>>? _chatSubscription;
+
+  // In-Game 5-second Toast Speech Bubble
+  ChatMessage? _activeSpeechBubble;
+  Timer? _speechBubbleTimer;
+  double _bubbleOpacity = 1.0;
 
   // Active game states
   UnoCard _topCard = const UnoCard(
@@ -115,6 +122,35 @@ class _GameScreenState extends State<GameScreen> {
         }
       });
     });
+
+    // 3. Listen to Real-time In-Game Chat & Taunts (5-second fade bubble)
+    bool isFirstLoad = true;
+    _chatSubscription = _gameService.streamChatMessages(effectiveRoomId).listen((messages) {
+      if (!mounted) return;
+      if (messages.isNotEmpty) {
+        if (!isFirstLoad) {
+          final latest = messages.last;
+          _showInGameSpeechBubble(latest);
+        }
+        isFirstLoad = false;
+      }
+    });
+  }
+
+  void _showInGameSpeechBubble(ChatMessage msg) {
+    _speechBubbleTimer?.cancel();
+    setState(() {
+      _activeSpeechBubble = msg;
+      _bubbleOpacity = 1.0;
+    });
+
+    // Fade out after 4.5s and remove at 5s
+    _speechBubbleTimer = Timer(const Duration(milliseconds: 4500), () {
+      if (mounted) setState(() => _bubbleOpacity = 0.0);
+      Timer(const Duration(milliseconds: 500), () {
+        if (mounted) setState(() => _activeSpeechBubble = null);
+      });
+    });
   }
 
   void _initVoiceChannel() {
@@ -128,6 +164,8 @@ class _GameScreenState extends State<GameScreen> {
 
   @override
   void dispose() {
+    _speechBubbleTimer?.cancel();
+    _chatSubscription?.cancel();
     _roomSubscription?.cancel();
     _handSubscription?.cancel();
     _voiceService.disconnect();
@@ -356,8 +394,10 @@ class _GameScreenState extends State<GameScreen> {
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (context) => ChatOverlayDialog(
+        roomId: widget.roomId.isNotEmpty ? widget.roomId : widget.roomCode,
         roomCode: widget.roomCode,
         currentUserName: widget.playerName,
+        gameService: _gameService,
       ),
     );
   }
@@ -376,6 +416,48 @@ class _GameScreenState extends State<GameScreen> {
 
                 // Real Opponents Bar (ONLY players who actually joined!)
                 _buildRealOpponentsBar(),
+
+                // In-Game 5-Second Fade Speech Bubble
+                if (_activeSpeechBubble != null)
+                  AnimatedOpacity(
+                    opacity: _bubbleOpacity,
+                    duration: const Duration(milliseconds: 500),
+                    child: Container(
+                      margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 4),
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          colors: [Color(0xFFE65100), Color(0xFFFF8F00)],
+                        ),
+                        borderRadius: BorderRadius.circular(20),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.orangeAccent.withOpacity(0.5),
+                            blurRadius: 10,
+                            offset: const Offset(0, 3),
+                          ),
+                        ],
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.chat_bubble, color: Colors.white, size: 16),
+                          const SizedBox(width: 8),
+                          Text(
+                            '${_activeSpeechBubble!.senderName}: ',
+                            style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 13),
+                          ),
+                          Flexible(
+                            child: Text(
+                              _activeSpeechBubble!.text,
+                              style: const TextStyle(color: Colors.white, fontSize: 13),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
 
                 // Central Table (Deck & Discard Pile)
                 Expanded(

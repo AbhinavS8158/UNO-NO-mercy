@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../models/game_room.dart';
 import '../models/uno_card.dart';
 import '../models/deck_generator.dart';
+import '../models/chat_message.dart';
 import 'game_service.dart';
 
 class FirebaseGameService implements IGameService {
@@ -358,6 +359,44 @@ class FirebaseGameService implements IGameService {
   @override
   Future<String> getLiveKitVoiceToken(String roomId) async {
     return 'token_$roomId';
+  }
+
+  @override
+  Future<void> sendChatMessage({
+    required String roomId,
+    required String senderName,
+    required String text,
+  }) async {
+    final uid = await _ensureAuthenticated();
+    await _firestore.collection('rooms').doc(roomId).collection('chat').add({
+      'senderId': uid,
+      'senderName': senderName,
+      'text': text,
+      'timestamp': FieldValue.serverTimestamp(),
+    });
+  }
+
+  @override
+  Stream<List<ChatMessage>> streamChatMessages(String roomId) {
+    return _firestore
+        .collection('rooms')
+        .doc(roomId)
+        .collection('chat')
+        .orderBy('timestamp', descending: false)
+        .snapshots()
+        .map((snap) {
+      return snap.docs.map((doc) {
+        final data = doc.data();
+        final ts = (data['timestamp'] as Timestamp?)?.toDate() ?? DateTime.now();
+        return ChatMessage(
+          id: doc.id,
+          senderId: data['senderId'] ?? '',
+          senderName: data['senderName'] ?? 'Player',
+          text: data['text'] ?? '',
+          timestamp: ts,
+        );
+      }).toList();
+    });
   }
 
   Map<String, dynamic> _cardToMap(UnoCard c) {
