@@ -2,6 +2,8 @@
 
 An authoritative real-time multiplayer implementation of **UNO Show ’em No Mercy** built with **Flutter** (Front-end), **Firebase Cloud Functions & Firestore** (Authoritative Server Game Engine), and **LiveKit WebRTC** (Secure In-Game Voice Chat).
 
+### 🌐 [🎮 Live Demo: Play Online Here](https://abhinavs8158.github.io/UNO-NO-mercy/)
+
 ---
 
 ## 🚀 Key Highlights
