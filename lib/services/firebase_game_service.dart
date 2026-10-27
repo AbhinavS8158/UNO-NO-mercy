@@ -23,6 +23,7 @@ class FirebaseGameService implements IGameService {
     return _cachedUserId!;
   }
 
+  @override
   String get currentUid => _auth.currentUser?.uid ?? _cachedUserId ?? 'player_me';
 
   @override
@@ -479,5 +480,66 @@ class FirebaseGameService implements IGameService {
       type: parseType(map['type']),
       numberValue: map['numberValue'],
     );
+  }
+
+  @override
+  Future<void> sendVoiceSignal({
+    required String roomId,
+    required String targetId,
+    required String senderId,
+    required String type,
+    required String data,
+  }) async {
+    await _firestore
+        .collection('rooms')
+        .doc(roomId)
+        .collection('voice_signals')
+        .add({
+      'from': senderId,
+      'to': targetId,
+      'type': type,
+      'data': data,
+      'timestamp': FieldValue.serverTimestamp(),
+    });
+  }
+
+  @override
+  Stream<List<Map<String, dynamic>>> streamVoiceSignals({
+    required String roomId,
+    required String myPlayerId,
+  }) {
+    return _firestore
+        .collection('rooms')
+        .doc(roomId)
+        .collection('voice_signals')
+        .where('to', isEqualTo: myPlayerId)
+        .snapshots()
+        .map((snapshot) {
+      return snapshot.docs.map((doc) {
+        final d = doc.data();
+        return {
+          'id': doc.id,
+          'from': d['from']?.toString() ?? '',
+          'to': d['to']?.toString() ?? '',
+          'type': d['type']?.toString() ?? '',
+          'data': d['data']?.toString() ?? '',
+        };
+      }).toList();
+    });
+  }
+
+  @override
+  Future<void> deleteVoiceSignal({
+    required String roomId,
+    required String signalId,
+  }) async {
+    try {
+      await _firestore
+          .collection('rooms')
+          .doc(roomId)
+          .collection('voice_signals')
+          .doc(signalId)
+          .delete();
+    } catch (_) {}
   }
 }

@@ -111,6 +111,9 @@ class _GameScreenState extends State<GameScreen> {
         // Filter out ME: Show ONLY real opponents who joined this room!
         _opponents = room.players.where((p) => p.id != _myUid).toList();
 
+        // Synchronize WebRTC voice peers with players in room
+        _voiceService.syncRoomPlayers(room.players.map((p) => p.id).toList());
+
         // Check if game has ended
         if (room.winnerId != null) {
           _showWinnerDialog(room.winnerId!);
@@ -187,7 +190,12 @@ class _GameScreenState extends State<GameScreen> {
   }
 
   void _initVoiceChannel() {
-    _voiceService.connect(roomCode: widget.roomCode, token: 'live_token');
+    final effectiveRoomId = widget.roomId.isNotEmpty ? widget.roomId : widget.roomCode;
+    _voiceService.connectToRoom(
+      gameService: _gameService,
+      roomId: effectiveRoomId,
+      myPlayerId: _gameService.currentUid,
+    );
     _voiceService.activeSpeakersStream.listen((speakers) {
       if (mounted) {
         setState(() => _activeSpeakers = speakers);
@@ -615,15 +623,35 @@ class _GameScreenState extends State<GameScreen> {
               builder: (context) => const RulesDialog(),
             ),
           ),
-          IconButton(
-            tooltip: 'Live Voice Chat',
-            icon: Icon(
-              _voiceService.isMuted ? Icons.mic_off : Icons.mic,
-              color: _voiceService.isConnected
-                  ? (_voiceService.isMuted ? Colors.redAccent : Colors.greenAccent)
-                  : Colors.white38,
+          GestureDetector(
+            onLongPress: _openVoiceSettings,
+            child: IconButton(
+              tooltip: 'Live Voice Chat (Tap to Mute/Unmute, Long press for Settings)',
+              icon: Icon(
+                _voiceService.isMuted ? Icons.mic_off : Icons.mic,
+                color: _voiceService.isConnected
+                    ? (_voiceService.isMuted ? Colors.redAccent : Colors.greenAccent)
+                    : Colors.white38,
+              ),
+              onPressed: () {
+                setState(() {
+                  _voiceService.toggleMute();
+                });
+                ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    duration: const Duration(milliseconds: 1200),
+                    backgroundColor: _voiceService.isMuted ? Colors.redAccent : Colors.green,
+                    content: Text(
+                      _voiceService.isMuted
+                          ? '🔇 മൈക്ക് ഓഫ് ചെയ്തു (Muted)'
+                          : '🎙️ മൈക്ക് ഓൺ ആണ് (Unmuted)',
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                );
+              },
             ),
-            onPressed: _openVoiceSettings,
           ),
           IconButton(
             tooltip: 'Text Chat',

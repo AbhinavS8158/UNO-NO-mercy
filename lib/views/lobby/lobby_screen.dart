@@ -6,6 +6,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../core/theme/uno_colors.dart';
 import '../../services/game_service.dart';
 import '../../services/firebase_game_service.dart';
+import '../../services/voice_service.dart';
 import '../game_board/game_screen.dart';
 import '../widgets/rules_dialog.dart';
 
@@ -60,6 +61,9 @@ class _LobbyScreenState extends State<LobbyScreen> {
         }
       });
 
+      // Synchronize WebRTC voice peers with players in room
+      LiveKitVoiceService.instance.syncRoomPlayers(room.players.map((p) => p.id).toList());
+
       // If host started the game, automatically take joined players to the GameScreen!
       if (room.status == 'in_progress') {
         _roomSubscription?.cancel();
@@ -90,6 +94,14 @@ class _LobbyScreenState extends State<LobbyScreen> {
         _currentRoomId = res['roomId'];
         _currentRoomCode = res['roomCode'];
       });
+
+      // Connect to Live WebRTC Voice Chat immediately
+      LiveKitVoiceService.instance.connectToRoom(
+        gameService: _gameService,
+        roomId: _currentRoomId!,
+        myPlayerId: _gameService.currentUid,
+      );
+
       _listenToRoomUpdates(_currentRoomId!);
     } catch (e) {
       _showError(e.toString());
@@ -111,6 +123,14 @@ class _LobbyScreenState extends State<LobbyScreen> {
         _currentRoomId = res['roomId'];
         _currentRoomCode = res['roomCode'];
       });
+
+      // Connect to Live WebRTC Voice Chat immediately
+      LiveKitVoiceService.instance.connectToRoom(
+        gameService: _gameService,
+        roomId: _currentRoomId!,
+        myPlayerId: _gameService.currentUid,
+      );
+
       _listenToRoomUpdates(_currentRoomId!);
     } catch (e) {
       _showError('റൂം കോഡ് തെറ്റാണ് അല്ലെങ്കിൽ റൂം നിലവിലില്ല!');
@@ -458,6 +478,80 @@ class _LobbyScreenState extends State<LobbyScreen> {
           ),
 
           const SizedBox(height: 20),
+
+          // Live Voice Chat Widget in Lobby
+          StreamBuilder<bool>(
+            stream: LiveKitVoiceService.instance.connectionStatusStream,
+            builder: (context, snapshot) {
+              final isConnected = LiveKitVoiceService.instance.isConnected;
+              final isMuted = LiveKitVoiceService.instance.isMuted;
+              return Container(
+                margin: const EdgeInsets.only(bottom: 16),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                decoration: BoxDecoration(
+                  color: isConnected ? Colors.green.withOpacity(0.12) : Colors.white10,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: isConnected ? Colors.greenAccent.withOpacity(0.3) : Colors.white24,
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: isMuted
+                            ? Colors.redAccent.withOpacity(0.2)
+                            : Colors.greenAccent.withOpacity(0.2),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        isMuted ? Icons.mic_off : Icons.mic,
+                        color: isMuted ? Colors.redAccent : Colors.greenAccent,
+                        size: 20,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            isConnected
+                                ? (isMuted ? 'മൈക്ക് മ്യൂട്ടാണ് (Muted)' : 'ലൈവ് വോയ്‌സ് ഓൺ ആണ് (Live Voice ON)')
+                                : 'വോയ്‌സ് കണക്റ്റ് ചെയ്യുന്നു...',
+                            style: GoogleFonts.rubik(
+                              color: isConnected ? Colors.white : Colors.white70,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 13,
+                            ),
+                          ),
+                          Text(
+                            isMuted
+                                ? 'ടാപ്പ് ചെയ്ത് അൺമ്യൂട്ട് ചെയ്യാം'
+                                : 'ഡിവൈസ് മൈക്ക് വഴി സംസാരിക്കാം 🎙️',
+                            style: const TextStyle(color: Colors.white54, fontSize: 11),
+                          ),
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      icon: Icon(
+                        isMuted ? Icons.mic_off : Icons.mic,
+                        color: isMuted ? Colors.redAccent : Colors.greenAccent,
+                      ),
+                      tooltip: isMuted ? 'Unmute Mic' : 'Mute Mic',
+                      onPressed: () {
+                        setState(() {
+                          LiveKitVoiceService.instance.toggleMute();
+                        });
+                      },
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
 
           // Start Game Button
           ElevatedButton(

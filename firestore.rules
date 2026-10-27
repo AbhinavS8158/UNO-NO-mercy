@@ -38,6 +38,11 @@ service cloud.firestore {
           request.resource.data.text.size() <= 200;
         allow update, delete: if false;
       }
+
+      // Realtime WebRTC voice signaling
+      match /voice_signals/{signalId} {
+        allow read, write, delete: if true;
+      }
     }
   }
 }

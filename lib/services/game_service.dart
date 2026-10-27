@@ -4,6 +4,7 @@ import '../models/uno_card.dart';
 import '../models/chat_message.dart';
 
 abstract class IGameService {
+  String get currentUid;
   Future<Map<String, String>> createRoom({required String playerName, String rules = 'no_mercy'});
   Future<Map<String, String>> joinRoom({required String roomCode, required String playerName});
   Future<void> startGame({required String roomId});
@@ -24,6 +25,24 @@ abstract class IGameService {
     required String text,
   });
   Stream<List<ChatMessage>> streamChatMessages(String roomId);
+
+  Future<void> sendVoiceSignal({
+    required String roomId,
+    required String targetId,
+    required String senderId,
+    required String type,
+    required String data,
+  });
+
+  Stream<List<Map<String, dynamic>>> streamVoiceSignals({
+    required String roomId,
+    required String myPlayerId,
+  });
+
+  Future<void> deleteVoiceSignal({
+    required String roomId,
+    required String signalId,
+  });
 }
 
 /// Robust Local Simulation & Fallback Service
@@ -36,6 +55,9 @@ class LocalGameService implements IGameService {
   final _handController = StreamController<List<UnoCard>>.broadcast();
 
   String currentUserId = 'player_host_1';
+
+  @override
+  String get currentUid => currentUserId;
 
   @override
   Future<Map<String, String>> createRoom({required String playerName, String rules = 'no_mercy'}) async {
@@ -236,6 +258,29 @@ class LocalGameService implements IGameService {
   Stream<List<ChatMessage>> streamChatMessages(String roomId) {
     return _chatController.stream;
   }
+
+  @override
+  Future<void> sendVoiceSignal({
+    required String roomId,
+    required String targetId,
+    required String senderId,
+    required String type,
+    required String data,
+  }) async {}
+
+  @override
+  Stream<List<Map<String, dynamic>>> streamVoiceSignals({
+    required String roomId,
+    required String myPlayerId,
+  }) {
+    return const Stream.empty();
+  }
+
+  @override
+  Future<void> deleteVoiceSignal({
+    required String roomId,
+    required String signalId,
+  }) async {}
 }
 
 extension ListExt<T> on List<T> {
