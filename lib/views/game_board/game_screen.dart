@@ -351,8 +351,64 @@ class _GameScreenState extends State<GameScreen> {
   }
 
   void _drawCardFromDeck() async {
+    final isMyTurn = _currentTurn == _myUid || _currentTurn.isEmpty;
+    if (!isMyTurn) {
+      String activePlayerName = 'Opponent';
+      final activeMatch = _allPlayers.where((p) => p.id == _currentTurn);
+      if (activeMatch.isNotEmpty) {
+        activePlayerName = activeMatch.first.name;
+      }
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('ഇപ്പോൾ $activePlayerName-ന്റെ ടേൺ ആണ്! നിങ്ങളുടെ ടേൺ ആകുമ്പോൾ കാർഡ് എടുക്കാം.'),
+          backgroundColor: Colors.redAccent,
+          duration: const Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
+
     final effectiveRoomId = widget.roomId.isNotEmpty ? widget.roomId : widget.roomCode;
-    await _gameService.drawCard(roomId: effectiveRoomId);
+    final int countBeingDrawn = _pendingDrawCount > 0 ? _pendingDrawCount : 1;
+
+    // Trigger visual draw animation from center deck to player hand
+    final screenSize = MediaQuery.of(context).size;
+    final startOffset = Offset(screenSize.width * 0.35, screenSize.height * 0.35);
+    final endOffset = Offset(screenSize.width * 0.5 - 40, screenSize.height * 0.78);
+
+    setState(() {
+      _selectedCard = null;
+      _flyingCardWidget = FlyingCardAnimation(
+        card: const UnoCard(id: 'flying_drawn', color: CardColor.wild, type: CardType.number),
+        startOffset: startOffset,
+        endOffset: endOffset,
+        onCompleted: () {
+          if (mounted) setState(() => _flyingCardWidget = null);
+        },
+      );
+    });
+
+    try {
+      await _gameService.drawCard(roomId: effectiveRoomId);
+      if (mounted) {
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              countBeingDrawn > 1
+                  ? '⚠️ +$countBeingDrawn പെനാൽറ്റി കാർഡുകൾ എടുത്തു!'
+                  : '🃏 ഡെക്കിൽ നിന്നും ഒരു കാർഡ് എടുത്തു!',
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
+            backgroundColor: countBeingDrawn > 1 ? Colors.orangeAccent : UnoColors.blue,
+            duration: const Duration(milliseconds: 1500),
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('Draw card error: $e');
+    }
   }
 
   void _showWinnerDialog(String winnerId) {
@@ -807,24 +863,48 @@ class _GameScreenState extends State<GameScreen> {
               ),
             ],
           ),
-          ElevatedButton(
-            onPressed: () async {
-              final effectiveRoomId = widget.roomId.isNotEmpty ? widget.roomId : widget.roomCode;
-              await _gameService.callUno(
-                roomId: effectiveRoomId,
-                callerName: widget.playerName,
-              );
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: UnoColors.yellow,
-              foregroundColor: Colors.black,
-              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-            ),
-            child: Text(
-              'CALL UNO!',
-              style: GoogleFonts.bebasNeue(fontSize: 16, letterSpacing: 1.2),
-            ),
+          Row(
+            children: [
+              ElevatedButton.icon(
+                onPressed: _drawCardFromDeck,
+                icon: Icon(
+                  _pendingDrawCount > 0 ? Icons.warning_amber_rounded : Icons.add_card,
+                  size: 15,
+                  color: Colors.white,
+                ),
+                label: Text(
+                  _pendingDrawCount > 0 ? 'DRAW +$_pendingDrawCount' : 'DRAW CARD',
+                  style: GoogleFonts.bebasNeue(fontSize: 15, letterSpacing: 1.0),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: _pendingDrawCount > 0 ? Colors.redAccent : UnoColors.blue,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                  elevation: 3,
+                ),
+              ),
+              const SizedBox(width: 8),
+              ElevatedButton(
+                onPressed: () async {
+                  final effectiveRoomId = widget.roomId.isNotEmpty ? widget.roomId : widget.roomCode;
+                  await _gameService.callUno(
+                    roomId: effectiveRoomId,
+                    callerName: widget.playerName,
+                  );
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: UnoColors.yellow,
+                  foregroundColor: Colors.black,
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                ),
+                child: Text(
+                  'CALL UNO!',
+                  style: GoogleFonts.bebasNeue(fontSize: 16, letterSpacing: 1.2),
+                ),
+              ),
+            ],
           ),
         ],
       ),

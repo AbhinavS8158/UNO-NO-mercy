@@ -192,8 +192,46 @@ class LocalGameService implements IGameService {
   @override
   Future<void> drawCard({required String roomId}) async {
     final hand = _hands[roomId]?[currentUserId] ?? [];
-    hand.add(const UnoCard(id: 'new_c', color: CardColor.blue, type: CardType.number, numberValue: 3));
-    _handController.add(hand);
+    final room = _rooms[roomId];
+    final countToDraw = (room?.drawCountPending != null && room!.drawCountPending > 0)
+        ? room.drawCountPending
+        : 1;
+
+    for (int i = 0; i < countToDraw; i++) {
+      hand.add(UnoCard(
+        id: 'drawn_${DateTime.now().microsecondsSinceEpoch}_$i',
+        color: CardColor.values[i % 4],
+        type: CardType.number,
+        numberValue: (i + 1) % 10,
+      ));
+    }
+    _handController.add(List.from(hand));
+
+    if (room != null) {
+      final updatedRoom = GameRoom(
+        id: roomId,
+        roomCode: room.roomCode,
+        status: room.status,
+        currentTurn: room.currentTurn,
+        turnDirection: room.turnDirection,
+        topCard: room.topCard,
+        activeColor: room.activeColor,
+        drawCountPending: 0, // penalty consumed
+        players: room.players
+            .map((p) => p.id == currentUserId
+                ? PlayerSummary(
+                    id: p.id,
+                    name: p.name,
+                    cardCount: hand.length,
+                    isHost: p.isHost,
+                  )
+                : p)
+            .toList(),
+        lastUnoCall: room.lastUnoCall,
+      );
+      _rooms[roomId] = updatedRoom;
+      _roomController.add(updatedRoom);
+    }
   }
 
   @override

@@ -69,65 +69,107 @@ class TableCenterView extends StatelessWidget {
             children: [
               // 1. Draw Pile
               GestureDetector(
+                behavior: HitTestBehavior.opaque,
                 onTap: onDrawDeckTapped,
-                child: Stack(
-                  alignment: Alignment.center,
-                  children: [
-                    // Fake stack depth
-                    Transform.translate(
-                      offset: const Offset(4, 4),
-                      child: Container(
-                        width: 100,
-                        height: 145,
-                        decoration: BoxDecoration(
-                          color: Colors.black45,
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                      ),
-                    ),
-                    Transform.translate(
-                      offset: const Offset(2, 2),
-                      child: Container(
-                        width: 100,
-                        height: 145,
-                        decoration: BoxDecoration(
-                          color: Colors.white24,
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                      ),
-                    ),
-                    // Main face down deck
-                    UnoCardWidget(
-                      card: const UnoCard(
-                        id: 'deck_top',
-                        color: CardColor.wild,
-                        type: CardType.number,
-                      ),
-                      isFaceUp: false,
-                      width: 100,
-                      height: 145,
-                    ),
-                    // Deck count badge
-                    Positioned(
-                      bottom: 8,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: Colors.black.withOpacity(0.75),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: Colors.white30),
-                        ),
-                        child: Text(
-                          '$remainingDeckCards',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
+                child: MouseRegion(
+                  cursor: SystemMouseCursors.click,
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      // Fake stack depth
+                      Transform.translate(
+                        offset: const Offset(4, 4),
+                        child: Container(
+                          width: 100,
+                          height: 145,
+                          decoration: BoxDecoration(
+                            color: Colors.black45,
+                            borderRadius: BorderRadius.circular(14),
                           ),
                         ),
                       ),
-                    ),
-                  ],
+                      Transform.translate(
+                        offset: const Offset(2, 2),
+                        child: Container(
+                          width: 100,
+                          height: 145,
+                          decoration: BoxDecoration(
+                            color: Colors.white24,
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                        ),
+                      ),
+                      // Main face down deck
+                      UnoCardWidget(
+                        card: const UnoCard(
+                          id: 'deck_top',
+                          color: CardColor.wild,
+                          type: CardType.number,
+                        ),
+                        isFaceUp: false,
+                        width: 100,
+                        height: 145,
+                      ),
+
+                      // Prominent Tap Prompt / Penalty Badge
+                      Positioned(
+                        top: 10,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: pendingDrawCount > 0 ? Colors.redAccent : Colors.amber,
+                            borderRadius: BorderRadius.circular(12),
+                            boxShadow: [
+                              BoxShadow(
+                                color: (pendingDrawCount > 0 ? Colors.redAccent : Colors.amber).withOpacity(0.6),
+                                blurRadius: 8,
+                              ),
+                            ],
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                pendingDrawCount > 0 ? Icons.warning_amber_rounded : Icons.add_card,
+                                size: 12,
+                                color: Colors.black,
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                pendingDrawCount > 0 ? '+$pendingDrawCount PENALTY' : 'DRAW',
+                                style: const TextStyle(
+                                  color: Colors.black,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+
+                      // Deck count badge
+                      Positioned(
+                        bottom: 8,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withOpacity(0.75),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: Colors.white30),
+                          ),
+                          child: Text(
+                            '$remainingDeckCards',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
 
