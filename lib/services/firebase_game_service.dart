@@ -217,20 +217,22 @@ class FirebaseGameService implements IGameService {
         nextTurnId = activePlayers[nextIdx]['id'];
       }
 
-      // 5. 7's Swap Rule
-      if (playedCard.type == CardType.pointSevenSwap && swapTargetPlayerId != null) {
-        final targetHandRef = roomRef.collection('private_hands').doc(swapTargetPlayerId);
-        final targetHandSnap = await transaction.get(targetHandRef);
-        final targetCards = (targetHandSnap.data()?['cards'] as List<dynamic>? ?? []);
-
-        // Swap Hands!
-        transaction.set(handRef, {'cards': targetCards});
-        transaction.set(targetHandRef, {'cards': cardsRaw});
+      // 5. 7's Swap & 0's Pass Target Preparation (ALL READS FIRST)
+      String? actualSwapTarget = swapTargetPlayerId;
+      if (playedCard.type == CardType.pointSevenSwap && (actualSwapTarget == null || actualSwapTarget.isEmpty) && activePlayers.length >= 2) {
+        int nextIdx = (curIdx + direction) % activePlayers.length;
+        if (nextIdx < 0) nextIdx += activePlayers.length;
+        actualSwapTarget = activePlayers[nextIdx]['id'];
       }
 
-      // 6. 0's Pass Rule: Pass all hands in current direction of play
+      final targetHandRef = (playedCard.type == CardType.pointSevenSwap && actualSwapTarget != null)
+          ? roomRef.collection('private_hands').doc(actualSwapTarget)
+          : null;
+      final targetHandSnap = targetHandRef != null ? await transaction.get(targetHandRef) : null;
+      final targetCards = (targetHandSnap?.data()?['cards'] as List<dynamic>? ?? []);
+
+      final List<List<dynamic>> allHands = [];
       if (playedCard.type == CardType.pointZeroPass && activePlayers.length >= 2) {
-        final List<List<dynamic>> allHands = [];
         for (var p in activePlayers) {
           final pId = p['id'] as String;
           if (pId == uid) {
@@ -241,34 +243,50 @@ class FirebaseGameService implements IGameService {
             allHands.add(pSnap.data()?['cards'] as List<dynamic>? ?? []);
           }
         }
+      }
 
-        // Shift hands by play direction
+      // 6. WRITES BEGIN HERE
+      final Map<String, int> playerHandCounts = {};
+      for (var p in rawPlayers) {
+        playerHandCounts[p['id']] = (p['cardCount'] as int?) ?? 7;
+      }
+
+      if (playedCard.type == CardType.pointSevenSwap && actualSwapTarget != null && targetHandRef != null) {
+        // Swap Hands!
+        transaction.set(handRef, {'cards': targetCards});
+        transaction.set(targetHandRef, {'cards': cardsRaw});
+        playerHandCounts[uid] = targetCards.length;
+        playerHandCounts[actualSwapTarget] = cardsRaw.length;
+      } else if (playedCard.type == CardType.pointZeroPass && activePlayers.length >= 2) {
+        // Shift hands by play direction:
         for (int i = 0; i < activePlayers.length; i++) {
           final targetIdx = (i + direction) % activePlayers.length;
           final adjustedTargetIdx = targetIdx < 0 ? targetIdx + activePlayers.length : targetIdx;
           final receivingPlayerId = activePlayers[adjustedTargetIdx]['id'] as String;
           final receivingHandRef = roomRef.collection('private_hands').doc(receivingPlayerId);
           transaction.set(receivingHandRef, {'cards': allHands[i]});
+          playerHandCounts[receivingPlayerId] = allHands[i].length;
         }
-      }
-
-      // If not 7's swap or 0's pass, commit the updated hand
-      if (playedCard.type != CardType.pointSevenSwap && playedCard.type != CardType.pointZeroPass) {
+      } else {
+        // Normal card played
         transaction.set(handRef, {'cards': cardsRaw});
+        playerHandCounts[uid] = cardsRaw.length;
       }
 
-      // Update player summary count & check winner (0 cards = Win!)
+      // Update player summary count & check winner (0 cards = Win!) / Mercy rule (25 cards)
       String? winnerId;
       final updatedPlayers = rawPlayers.map((p) {
-        if (p['id'] == uid) {
-          final count = cardsRaw.length;
-          if (count == 0) winnerId = uid;
-          return {
-            ...p as Map<String, dynamic>,
-            'cardCount': count,
-          };
+        final pId = p['id'] as String;
+        final count = playerHandCounts[pId] ?? (p['cardCount'] as int? ?? 7);
+        final isKnockedOut = (p['isKnockedOut'] == true) || (count >= 25);
+        if (count == 0 && winnerId == null) {
+          winnerId = pId;
         }
-        return p;
+        return {
+          ...p as Map<String, dynamic>,
+          'cardCount': count,
+          'isKnockedOut': isKnockedOut,
+        };
       }).toList();
 
       transaction.update(roomRef, {

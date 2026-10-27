@@ -133,18 +133,26 @@ class UnoCard {
       return isDrawPenalty && penaltyCount >= topCard.penaltyCount;
     }
 
-    // 2. Wilds:
-    if (isWild) return true;
-
-    // 3. Color:
-    if (color == topCard.color) return true;
-
-    // 4. Number:
-    if (type == CardType.number && topCard.type == CardType.number) {
-      return numberValue == topCard.numberValue;
+    // 2. 0's Pass and 7's Swap can be played on ANY card regardless of color:
+    if (type == CardType.pointZeroPass ||
+        numberValue == 0 ||
+        type == CardType.pointSevenSwap ||
+        numberValue == 7) {
+      return true;
     }
 
-    // 5. Action:
+    // 3. Wilds:
+    if (isWild) return true;
+
+    // 4. Color:
+    if (color == topCard.color) return true;
+
+    // 5. Number:
+    if (numberValue != null && topCard.numberValue != null && numberValue == topCard.numberValue) {
+      return true;
+    }
+
+    // 6. Action:
     if (type == topCard.type && type != CardType.number) {
       return true;
     }

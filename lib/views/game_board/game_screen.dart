@@ -58,6 +58,7 @@ class _GameScreenState extends State<GameScreen> {
     type: CardType.number,
     numberValue: 7,
   );
+  String? _previousTopCardId;
   CardColor _activeColor = CardColor.red;
   int _pendingDrawCount = 0;
   bool _isClockwise = true;
@@ -119,6 +120,30 @@ class _GameScreenState extends State<GameScreen> {
 
         // Filter out ME: Show ONLY real opponents who joined this room!
         _opponents = room.players.where((p) => p.id != _myUid).toList();
+
+        // Notify if 7's SWAP or 0's PASS was played by another player
+        if (_previousTopCardId != null && _previousTopCardId != room.topCard.id && room.currentTurn == _myUid) {
+          if (room.topCard.type == CardType.pointSevenSwap) {
+            ScaffoldMessenger.of(context).hideCurrentSnackBar();
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('⇄ 7 SWAP! കാർഡുകൾ പരസ്പരം കൈമാറി!'),
+                backgroundColor: Colors.purpleAccent,
+                duration: Duration(seconds: 2),
+              ),
+            );
+          } else if (room.topCard.type == CardType.pointZeroPass) {
+            ScaffoldMessenger.of(context).hideCurrentSnackBar();
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('🔄 0 PASS! കാർഡുകൾ അടുത്തയാൾക്ക് കൈമാറി!'),
+                backgroundColor: Colors.teal,
+                duration: Duration(seconds: 2),
+              ),
+            );
+          }
+        }
+        _previousTopCardId = room.topCard.id;
 
         // Synchronize WebRTC voice peers with players in room
         _voiceService.syncRoomPlayers(room.players.map((p) => p.id).toList());
@@ -290,7 +315,11 @@ class _GameScreenState extends State<GameScreen> {
     // 2. If 7's Swap card, prompt for target player selection
     String? swapTargetPlayerId;
     if (card.type == CardType.pointSevenSwap && _opponents.isNotEmpty) {
-      swapTargetPlayerId = await _showSwapTargetDialog();
+      if (_opponents.length == 1) {
+        swapTargetPlayerId = _opponents.first.id;
+      } else {
+        swapTargetPlayerId = await _showSwapTargetDialog();
+      }
     }
 
     final screenSize = MediaQuery.of(context).size;
@@ -322,6 +351,24 @@ class _GameScreenState extends State<GameScreen> {
               const SnackBar(
                 content: Text('⚡ SKIP EVERYONE! ബാക്കി എല്ലാവരെയും സ്കിപ്പ് ചെയ്തു. നിങ്ങൾ വീണ്ടും കളിക്കുക!'),
                 backgroundColor: Colors.amber,
+                duration: Duration(seconds: 2),
+              ),
+            );
+          } else if (card.type == CardType.pointSevenSwap && mounted) {
+            ScaffoldMessenger.of(context).hideCurrentSnackBar();
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('⇄ 7 SWAP! കാർഡുകൾ പരസ്പരം കൈമാറി!'),
+                backgroundColor: Colors.purpleAccent,
+                duration: Duration(seconds: 2),
+              ),
+            );
+          } else if (card.type == CardType.pointZeroPass && mounted) {
+            ScaffoldMessenger.of(context).hideCurrentSnackBar();
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('🔄 0 PASS! കാർഡുകൾ അടുത്തയാൾക്ക് കൈമാറി!'),
+                backgroundColor: Colors.teal,
                 duration: Duration(seconds: 2),
               ),
             );

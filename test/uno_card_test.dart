@@ -95,5 +95,34 @@ void main() {
       // +10 can stack on +4 or +6
       expect(drawTen.canPlayOn(activeDrawFour, pendingDrawCount: 4), isTrue);
     });
+
+    test('0 Pass and 7 Swap can be played on any color card', () {
+      const redTopCard = UnoCard(
+        id: 'r1',
+        color: CardColor.red,
+        type: CardType.number,
+        numberValue: 3,
+      );
+
+      const blueZeroPass = UnoCard(
+        id: 'z1',
+        color: CardColor.blue,
+        type: CardType.pointZeroPass,
+        numberValue: 0,
+      );
+
+      const yellowSevenSwap = UnoCard(
+        id: 's1',
+        color: CardColor.yellow,
+        type: CardType.pointSevenSwap,
+        numberValue: 7,
+      );
+
+      // Blue 0 can be played on Red 3
+      expect(blueZeroPass.canPlayOn(redTopCard), isTrue);
+
+      // Yellow 7 can be played on Red 3
+      expect(yellowSevenSwap.canPlayOn(redTopCard), isTrue);
+    });
   });
 }

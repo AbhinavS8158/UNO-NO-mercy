@@ -105,9 +105,13 @@ class GameRoom {
       }
     }
 
+    final parsedActiveColor = parseColor(map['activeColor']);
+    final topCardColor = parseColor(topCardMap['color']);
     final topCard = UnoCard(
       id: topCardMap['id'] ?? 'top',
-      color: parseColor(topCardMap['color']),
+      color: (topCardColor == CardColor.wild && parsedActiveColor != CardColor.wild)
+          ? parsedActiveColor
+          : topCardColor,
       type: parseType(topCardMap['type']),
       numberValue: topCardMap['numberValue'],
     );
