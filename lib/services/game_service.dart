@@ -14,7 +14,7 @@ abstract class IGameService {
     String? swapTargetPlayerId,
   });
   Future<void> drawCard({required String roomId});
-  Future<void> callUno({required String roomId});
+  Future<void> callUno({required String roomId, required String callerName});
   Stream<GameRoom> streamRoom(String roomId);
   Stream<List<UnoCard>> streamPrivateHand(String roomId, String myUserId);
   Future<String> getLiveKitVoiceToken(String roomId);
@@ -175,7 +175,27 @@ class LocalGameService implements IGameService {
   }
 
   @override
-  Future<void> callUno({required String roomId}) async {}
+  Future<void> callUno({required String roomId, required String callerName}) async {
+    final room = _rooms[roomId];
+    if (room == null) return;
+    final updatedRoom = GameRoom(
+      id: roomId,
+      roomCode: room.roomCode,
+      status: room.status,
+      currentTurn: room.currentTurn,
+      turnDirection: room.turnDirection,
+      topCard: room.topCard,
+      activeColor: room.activeColor,
+      drawCountPending: room.drawCountPending,
+      players: room.players,
+      lastUnoCall: {
+        'callerName': callerName,
+        'timestamp': DateTime.now().millisecondsSinceEpoch,
+      },
+    );
+    _rooms[roomId] = updatedRoom;
+    _roomController.add(updatedRoom);
+  }
 
   @override
   Stream<GameRoom> streamRoom(String roomId) {

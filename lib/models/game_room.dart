@@ -51,6 +51,7 @@ class GameRoom {
   final int drawCountPending;
   final List<PlayerSummary> players;
   final String? winnerId;
+  final Map<String, dynamic>? lastUnoCall;
 
   const GameRoom({
     required this.id,
@@ -63,6 +64,7 @@ class GameRoom {
     required this.drawCountPending,
     required this.players,
     this.winnerId,
+    this.lastUnoCall,
   });
 
   bool get isWaiting => status == 'waiting';
@@ -124,6 +126,7 @@ class GameRoom {
       drawCountPending: map['drawCountPending'] ?? 0,
       players: players,
       winnerId: map['winnerId'],
+      lastUnoCall: map['lastUnoCall'] as Map<String, dynamic>?,
     );
   }
 }

@@ -349,7 +349,15 @@ class FirebaseGameService implements IGameService {
   }
 
   @override
-  Future<void> callUno({required String roomId}) async {}
+  Future<void> callUno({required String roomId, required String callerName}) async {
+    await _firestore.collection('rooms').doc(roomId).update({
+      'lastUnoCall': {
+        'callerName': callerName,
+        'timestamp': DateTime.now().millisecondsSinceEpoch,
+      },
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+  }
 
   @override
   Stream<GameRoom> streamRoom(String roomId) {

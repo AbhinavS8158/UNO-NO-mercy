@@ -45,6 +45,12 @@ class _GameScreenState extends State<GameScreen> {
   Timer? _speechBubbleTimer;
   double _bubbleOpacity = 1.0;
 
+  // 2-Second Universal UNO Call Alert
+  String? _activeUnoAlertMessage;
+  Timer? _unoAlertTimer;
+  double _unoAlertOpacity = 1.0;
+  int? _lastProcessedUnoCallTimestamp;
+
   // Active game states
   UnoCard _topCard = const UnoCard(
     id: 'top_init',
@@ -109,6 +115,16 @@ class _GameScreenState extends State<GameScreen> {
         if (room.winnerId != null) {
           _showWinnerDialog(room.winnerId!);
         }
+
+        // Universal Real-time UNO Call across ALL devices!
+        if (room.lastUnoCall != null) {
+          final ts = room.lastUnoCall!['timestamp'] as int? ?? 0;
+          if (_lastProcessedUnoCallTimestamp == null || ts > _lastProcessedUnoCallTimestamp!) {
+            _lastProcessedUnoCallTimestamp = ts;
+            final caller = room.lastUnoCall!['callerName'] ?? 'Player';
+            _triggerUnoCallBanner("$caller UNO വിളിച്ചു കേട്ടോ.....");
+          }
+        }
       });
     });
 
@@ -154,6 +170,22 @@ class _GameScreenState extends State<GameScreen> {
     });
   }
 
+  void _triggerUnoCallBanner(String message) {
+    _unoAlertTimer?.cancel();
+    setState(() {
+      _activeUnoAlertMessage = message;
+      _unoAlertOpacity = 1.0;
+    });
+
+    // Fade out at 1.5s, disappear at 2.0s!
+    _unoAlertTimer = Timer(const Duration(milliseconds: 1500), () {
+      if (mounted) setState(() => _unoAlertOpacity = 0.0);
+      Timer(const Duration(milliseconds: 500), () {
+        if (mounted) setState(() => _activeUnoAlertMessage = null);
+      });
+    });
+  }
+
   void _initVoiceChannel() {
     _voiceService.connect(roomCode: widget.roomCode, token: 'live_token');
     _voiceService.activeSpeakersStream.listen((speakers) {
@@ -165,6 +197,7 @@ class _GameScreenState extends State<GameScreen> {
 
   @override
   void dispose() {
+    _unoAlertTimer?.cancel();
     _speechBubbleTimer?.cancel();
     _chatSubscription?.cancel();
     _roomSubscription?.cancel();
@@ -488,6 +521,48 @@ class _GameScreenState extends State<GameScreen> {
             ),
 
             if (_flyingCardWidget != null) _flyingCardWidget!,
+
+            // 2-Second Universal UNO Call Banner across ALL players
+            if (_activeUnoAlertMessage != null)
+              Center(
+                child: AnimatedOpacity(
+                  opacity: _unoAlertOpacity,
+                  duration: const Duration(milliseconds: 400),
+                  child: Container(
+                    margin: const EdgeInsets.symmetric(horizontal: 24),
+                    padding: const EdgeInsets.symmetric(horizontal: 26, vertical: 16),
+                    decoration: BoxDecoration(
+                      color: UnoColors.yellow,
+                      borderRadius: BorderRadius.circular(30),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.amberAccent.withOpacity(0.9),
+                          blurRadius: 30,
+                          spreadRadius: 6,
+                        ),
+                      ],
+                      border: Border.all(color: Colors.white, width: 3.5),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.campaign_rounded, color: Colors.black, size: 34),
+                        const SizedBox(width: 10),
+                        Flexible(
+                          child: Text(
+                            _activeUnoAlertMessage!,
+                            style: GoogleFonts.rubik(
+                              color: Colors.black,
+                              fontSize: 18,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
           ],
         ),
       ),
@@ -668,12 +743,11 @@ class _GameScreenState extends State<GameScreen> {
             ],
           ),
           ElevatedButton(
-            onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('UNO വിളിച്ചു! 📢'),
-                  backgroundColor: Colors.amber,
-                ),
+            onPressed: () async {
+              final effectiveRoomId = widget.roomId.isNotEmpty ? widget.roomId : widget.roomCode;
+              await _gameService.callUno(
+                roomId: effectiveRoomId,
+                callerName: widget.playerName,
               );
             },
             style: ElevatedButton.styleFrom(
