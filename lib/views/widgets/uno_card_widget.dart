@@ -334,6 +334,21 @@ class UnoCardWidget extends StatelessWidget {
             ),
           ],
         );
+      case CardType.wildReverseDrawFour:
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.sync, color: Colors.white, size: 28),
+            Text(
+              '+4',
+              style: GoogleFonts.blackOpsOne(
+                fontSize: width * 0.35,
+                color: Colors.white,
+              ),
+            ),
+          ],
+        );
+      case CardType.colorRoulette:
       case CardType.roulette:
         return Icon(
           Icons.casino,

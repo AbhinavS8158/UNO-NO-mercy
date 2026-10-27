@@ -147,12 +147,26 @@ class _GameScreenState extends State<GameScreen> {
     if (!card.canPlayOn(_topCard, pendingDrawCount: _pendingDrawCount)) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('${card.displayLabel} ഈ സമയത്ത് കളിക്കാൻ കഴിയില്ല!'),
+          content: Text('${card.displayLabel} ഈ സമയത്ത് കളിക്കാൻ കഴിയില്ല! (No Mercy Stacking Rule)'),
           backgroundColor: Colors.redAccent,
           duration: const Duration(milliseconds: 1500),
         ),
       );
       return;
+    }
+
+    // 1. If Wild card, prompt for color selection
+    CardColor chosenColor = card.color;
+    if (card.isWild) {
+      final selectedColor = await _showColorPickerDialog();
+      if (selectedColor == null) return; // User cancelled
+      chosenColor = selectedColor;
+    }
+
+    // 2. If 7's Swap card, prompt for target player selection
+    String? swapTargetPlayerId;
+    if (card.type == CardType.pointSevenSwap && _opponents.isNotEmpty) {
+      swapTargetPlayerId = await _showSwapTargetDialog();
     }
 
     final screenSize = MediaQuery.of(context).size;
@@ -173,11 +187,83 @@ class _GameScreenState extends State<GameScreen> {
           await _gameService.playCard(
             roomId: effectiveRoomId,
             cardId: card.id,
-            chosenColor: card.isWild ? CardColor.blue : card.color,
+            chosenColor: chosenColor,
+            swapTargetPlayerId: swapTargetPlayerId,
           );
         },
       );
     });
+  }
+
+  Future<CardColor?> _showColorPickerDialog() async {
+    return showDialog<CardColor>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        backgroundColor: UnoColors.surfaceElevated,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text(
+          'SELECT COLOR 🎨',
+          style: GoogleFonts.bebasNeue(color: Colors.white, fontSize: 22),
+          textAlign: TextAlign.center,
+        ),
+        content: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          children: [
+            _colorButton(CardColor.red, UnoColors.red),
+            _colorButton(CardColor.blue, UnoColors.blue),
+            _colorButton(CardColor.green, UnoColors.green),
+            _colorButton(CardColor.yellow, UnoColors.yellow),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _colorButton(CardColor color, Color colorVal) {
+    return InkWell(
+      onTap: () => Navigator.pop(context, color),
+      child: Container(
+        width: 48,
+        height: 48,
+        decoration: BoxDecoration(
+          color: colorVal,
+          shape: BoxShape.circle,
+          boxShadow: [
+            BoxShadow(color: colorVal.withOpacity(0.5), blurRadius: 8),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<String?> _showSwapTargetDialog() async {
+    return showDialog<String>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        backgroundColor: UnoColors.surfaceElevated,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text(
+          '7\'s SWAP: CHOOSE PLAYER ⇄',
+          style: GoogleFonts.bebasNeue(color: Colors.amber, fontSize: 20),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: _opponents.map((opp) {
+            return ListTile(
+              leading: CircleAvatar(
+                backgroundColor: UnoColors.yellow,
+                child: Text(opp.name.isNotEmpty ? opp.name[0] : 'P'),
+              ),
+              title: Text(opp.name, style: const TextStyle(color: Colors.white)),
+              subtitle: Text('${opp.cardCount} cards', style: const TextStyle(color: Colors.white54)),
+              onTap: () => Navigator.pop(context, opp.id),
+            );
+          }).toList(),
+        ),
+      ),
+    );
   }
 
   void _drawCardFromDeck() async {

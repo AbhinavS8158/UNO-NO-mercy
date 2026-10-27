@@ -4,23 +4,24 @@ enum CardType {
   number,
   skip,
   reverse,
+  skipEveryone,
   drawTwo,
   drawFour,
-  // UNO Show 'em No Mercy Specials
   drawSix,
   drawTen,
-  discardAll,
-  skipEveryone,
+  wildReverseDrawFour,
   roulette,
-  pointSevenSwap, // No Mercy 7 rule: swap hands with a player
-  pointZeroPass,  // No Mercy 0 rule: pass hands in current direction
+  colorRoulette,
+  discardAll,
+  pointSevenSwap,
+  pointZeroPass,
 }
 
 class UnoCard {
   final String id;
   final CardColor color;
   final CardType type;
-  final int? numberValue; // 0 to 9 if type == number
+  final int? numberValue; // 0 to 9
 
   const UnoCard({
     required this.id,
@@ -29,19 +30,26 @@ class UnoCard {
     this.numberValue,
   });
 
-  bool get isWild => color == CardColor.wild;
+  bool get isWild =>
+      color == CardColor.wild ||
+      type == CardType.drawTen ||
+      type == CardType.wildReverseDrawFour ||
+      type == CardType.colorRoulette ||
+      type == CardType.roulette;
 
   bool get isDrawPenalty =>
       type == CardType.drawTwo ||
       type == CardType.drawFour ||
       type == CardType.drawSix ||
-      type == CardType.drawTen;
+      type == CardType.drawTen ||
+      type == CardType.wildReverseDrawFour;
 
   int get penaltyCount {
     switch (type) {
       case CardType.drawTwo:
         return 2;
       case CardType.drawFour:
+      case CardType.wildReverseDrawFour:
         return 4;
       case CardType.drawSix:
         return 6;
@@ -52,7 +60,6 @@ class UnoCard {
     }
   }
 
-  /// Label displayed on card corners & center
   String get displayLabel {
     if (type == CardType.number) {
       return '${numberValue ?? 0}';
@@ -62,6 +69,8 @@ class UnoCard {
         return '⊘';
       case CardType.reverse:
         return '⇄';
+      case CardType.skipEveryone:
+        return 'ALL ⊘';
       case CardType.drawTwo:
         return '+2';
       case CardType.drawFour:
@@ -70,12 +79,13 @@ class UnoCard {
         return '+6';
       case CardType.drawTen:
         return '+10';
-      case CardType.discardAll:
-        return 'ALL';
-      case CardType.skipEveryone:
-        return 'ALL ⊘';
+      case CardType.wildReverseDrawFour:
+        return '⇄ +4';
+      case CardType.colorRoulette:
       case CardType.roulette:
         return '🎰';
+      case CardType.discardAll:
+        return 'ALL';
       case CardType.pointSevenSwap:
         return '7 ⇄';
       case CardType.pointZeroPass:
@@ -85,55 +95,56 @@ class UnoCard {
     }
   }
 
-  /// Subtitle or descriptor
   String get actionName {
     switch (type) {
       case CardType.skip:
         return 'SKIP';
       case CardType.reverse:
         return 'REVERSE';
+      case CardType.skipEveryone:
+        return 'SKIP EVERYONE';
       case CardType.drawTwo:
         return 'DRAW 2';
       case CardType.drawFour:
-        return 'WILD +4';
+        return 'DRAW 4';
       case CardType.drawSix:
         return 'DRAW 6';
       case CardType.drawTen:
-        return 'DRAW 10';
-      case CardType.discardAll:
-        return 'DISCARD ALL';
-      case CardType.skipEveryone:
-        return 'SKIP EVERYONE';
+        return 'WILD +10';
+      case CardType.wildReverseDrawFour:
+        return 'REV DRAW 4';
+      case CardType.colorRoulette:
       case CardType.roulette:
         return 'ROULETTE';
+      case CardType.discardAll:
+        return 'DISCARD ALL';
       case CardType.pointSevenSwap:
-        return 'SWAP HAND';
+        return '7 SWAP';
       case CardType.pointZeroPass:
-        return 'PASS HAND';
+        return '0 PASS';
       default:
         return '';
     }
   }
 
-  /// Check if this card matches the top card under normal & stacking rules
   bool canPlayOn(UnoCard topCard, {int pendingDrawCount = 0}) {
-    // If there is an active stacking penalty, must play a matching or higher draw card!
+    // 1. Official Stacking:
     if (pendingDrawCount > 0) {
       return isDrawPenalty && penaltyCount >= topCard.penaltyCount;
     }
 
-    // Wild cards can always be played
+    // 2. Wilds:
     if (isWild) return true;
 
-    // Matching color
+    // 3. Color:
     if (color == topCard.color) return true;
 
-    // Matching number
+    // 4. Number:
     if (type == CardType.number && topCard.type == CardType.number) {
       return numberValue == topCard.numberValue;
     }
 
-    // Matching action symbol
+    // 5. Action:
     if (type == topCard.type && type != CardType.number) {
       return true;
     }

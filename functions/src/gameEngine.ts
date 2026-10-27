@@ -5,6 +5,7 @@ export function getPenaltyCount(card: ServerCard): number {
     case 'DRAW_2':
       return 2;
     case 'DRAW_4':
+    case 'WILD_REVERSE_DRAW_4':
       return 4;
     case 'DRAW_6':
       return 6;

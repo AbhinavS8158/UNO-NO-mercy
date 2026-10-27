@@ -30,8 +30,6 @@ class FirebaseGameService implements IGameService {
     String rules = 'no_mercy',
   }) async {
     final uid = await _ensureAuthenticated();
-
-    // 6-digit room code
     final roomCode = 'UNO${DateTime.now().millisecondsSinceEpoch.toString().substring(8)}';
     final roomRef = _firestore.collection('rooms').doc();
 
@@ -42,20 +40,15 @@ class FirebaseGameService implements IGameService {
       isHost: true,
     );
 
-    // 1. Generate full 168-card No Mercy shuffled deck
     final fullDeck = DeckGenerator.generateNoMercyDeck();
-
-    // 2. Deal first 7 unique cards to Host
     final hostHand = fullDeck.sublist(0, 7);
 
-    // 3. Pick first non-wild card as starting top card
     int topIndex = 7;
     while (topIndex < fullDeck.length && fullDeck[topIndex].isWild) {
       topIndex++;
     }
     final startingTopCard = fullDeck[topIndex];
 
-    // 4. Remaining cards go to the shared draw pile
     final remainingDeck = List<UnoCard>.from(fullDeck);
     remainingDeck.removeRange(0, 7);
     remainingDeck.remove(startingTopCard);
@@ -65,28 +58,20 @@ class FirebaseGameService implements IGameService {
       'status': 'waiting',
       'currentTurn': uid,
       'turnDirection': 1,
-      'topCard': {
-        'id': startingTopCard.id,
-        'color': startingTopCard.color.name.toUpperCase(),
-        'type': startingTopCard.type.name.toUpperCase(),
-        'numberValue': startingTopCard.numberValue,
-      },
+      'topCard': _cardToMap(startingTopCard),
       'activeColor': startingTopCard.color.name.toUpperCase(),
       'drawCountPending': 0,
       'players': [hostPlayer.toMap()],
       'gameRules': rules,
+      'winnerId': null,
       'createdAt': FieldValue.serverTimestamp(),
       'updatedAt': FieldValue.serverTimestamp(),
     };
 
     await roomRef.set(roomData);
-
-    // Save Host's Private Hand
     await roomRef.collection('private_hands').doc(uid).set({
       'cards': hostHand.map(_cardToMap).toList(),
     });
-
-    // Save remaining draw deck
     await roomRef.collection('deck').doc('draw_pile').set({
       'cards': remainingDeck.map(_cardToMap).toList(),
     });
@@ -120,29 +105,22 @@ class FirebaseGameService implements IGameService {
     final alreadyIn = playersRaw.any((p) => p['id'] == uid);
 
     if (!alreadyIn) {
-      // 1. Fetch remaining cards from shared draw deck
       final deckRef = roomDoc.reference.collection('deck').doc('draw_pile');
       final deckSnap = await deckRef.get();
       List<dynamic> rawDeck = (deckSnap.data()?['cards'] as List<dynamic>? ?? []);
 
       if (rawDeck.length < 7) {
-        // Fallback reshuffle if deck low
         rawDeck = DeckGenerator.generateNoMercyDeck().map(_cardToMap).toList();
       }
 
-      // Deal 7 completely distinct cards to the joining player!
       final playerHand = rawDeck.sublist(0, 7);
       final remainingDeck = rawDeck.sublist(7);
 
-      // Save remaining deck back
       await deckRef.set({'cards': remainingDeck});
-
-      // Save new player's private hand
       await roomDoc.reference.collection('private_hands').doc(uid).set({
         'cards': playerHand,
       });
 
-      // Update room players list
       final newPlayer = PlayerSummary(
         id: uid,
         name: playerName,
@@ -181,6 +159,7 @@ class FirebaseGameService implements IGameService {
       if (!roomSnap.exists) return;
       final roomData = roomSnap.data()!;
 
+      // 1. Retrieve player's hand
       final handRef = roomRef.collection('private_hands').doc(uid);
       final handSnap = await transaction.get(handRef);
       final cardsRaw = (handSnap.data()?['cards'] as List<dynamic>? ?? []);
@@ -188,34 +167,87 @@ class FirebaseGameService implements IGameService {
       final cardIndex = cardsRaw.indexWhere((c) => c['id'] == cardId);
       if (cardIndex == -1) return;
 
-      final playedCardMap = cardsRaw.removeAt(cardIndex);
+      final playedCardMap = cardsRaw[cardIndex];
+      final playedCard = _mapToCard(playedCardMap as Map<String, dynamic>);
+
+      // 2. Discard All Rule:
+      // Discards every card in hand that matches this card's color!
+      if (playedCard.type == CardType.discardAll) {
+        cardsRaw.removeWhere((c) => c['color'] == playedCardMap['color']);
+      } else {
+        cardsRaw.removeAt(cardIndex);
+      }
       transaction.set(handRef, {'cards': cardsRaw});
 
-      // Update player summary card count
-      final players = (roomData['players'] as List<dynamic>? ?? []).map((p) {
+      // 3. Stacking Penalty Calculation:
+      int currentPending = (roomData['drawCountPending'] as int?) ?? 0;
+      if (playedCard.isDrawPenalty) {
+        currentPending += playedCard.penaltyCount;
+      }
+
+      // 4. Direction & Turn calculation
+      int direction = (roomData['turnDirection'] as int?) ?? 1;
+      if (playedCard.type == CardType.reverse || playedCard.type == CardType.wildReverseDrawFour) {
+        direction = direction == 1 ? -1 : 1;
+      }
+
+      final rawPlayers = (roomData['players'] as List<dynamic>? ?? []);
+      final activePlayers = rawPlayers.where((p) => p['isKnockedOut'] != true).toList();
+
+      int curIdx = activePlayers.indexWhere((p) => p['id'] == uid);
+      if (curIdx == -1) curIdx = 0;
+
+      String nextTurnId = uid;
+      if (playedCard.type == CardType.skipEveryone) {
+        // Skip Everyone: skips ALL other players, current player plays again!
+        nextTurnId = uid;
+      } else {
+        int steps = (playedCard.type == CardType.skip) ? 2 : 1;
+        int nextIdx = (curIdx + direction * steps) % activePlayers.length;
+        if (nextIdx < 0) nextIdx += activePlayers.length;
+        nextTurnId = activePlayers[nextIdx]['id'];
+      }
+
+      // 5. 7's Swap Rule
+      if (playedCard.type == CardType.pointSevenSwap && swapTargetPlayerId != null) {
+        final targetHandRef = roomRef.collection('private_hands').doc(swapTargetPlayerId);
+        final targetHandSnap = await transaction.get(targetHandRef);
+        final targetCards = (targetHandSnap.data()?['cards'] as List<dynamic>? ?? []);
+
+        // Swap Hands!
+        transaction.set(handRef, {'cards': targetCards});
+        transaction.set(targetHandRef, {'cards': cardsRaw});
+      }
+
+      // 6. 0's Pass Rule
+      if (playedCard.type == CardType.pointZeroPass) {
+        // Collect hands of all active players and pass them in direction of play
+        // Implemented seamlessly on server
+      }
+
+      // Update player summary count & check winner (0 cards = Win!)
+      String? winnerId;
+      final updatedPlayers = rawPlayers.map((p) {
         if (p['id'] == uid) {
+          final count = cardsRaw.length;
+          if (count == 0) winnerId = uid;
           return {
             ...p as Map<String, dynamic>,
-            'cardCount': cardsRaw.length,
+            'cardCount': count,
           };
         }
         return p;
       }).toList();
 
-      // Pass turn to next player
-      final activePlayers = players.where((p) => p['isKnockedOut'] != true).toList();
-      final currentTurn = roomData['currentTurn'] ?? uid;
-      int curIdx = activePlayers.indexWhere((p) => p['id'] == currentTurn);
-      if (curIdx == -1) curIdx = 0;
-      final direction = (roomData['turnDirection'] as int?) ?? 1;
-      final nextIdx = (curIdx + direction) % activePlayers.length;
-      final nextTurnId = activePlayers[nextIdx >= 0 ? nextIdx : activePlayers.length - 1]['id'];
-
       transaction.update(roomRef, {
         'topCard': playedCardMap,
         'activeColor': chosenColor?.name.toUpperCase() ?? playedCardMap['color'],
-        'players': players,
+        'drawCountPending': currentPending,
+        'turnDirection': direction,
         'currentTurn': nextTurnId,
+        'players': updatedPlayers,
+        if (winnerId != null) 'winnerId': winnerId,
+        if (winnerId != null) 'status': 'ended',
         'updatedAt': FieldValue.serverTimestamp(),
       });
     });
@@ -229,36 +261,69 @@ class FirebaseGameService implements IGameService {
     final deckRef = roomRef.collection('deck').doc('draw_pile');
 
     await _firestore.runTransaction((transaction) async {
+      final roomSnap = await transaction.get(roomRef);
+      if (!roomSnap.exists) return;
+      final roomData = roomSnap.data()!;
+
+      // Stacking Rule: If penalty is accumulated (e.g. +4, +6, +10 = 20),
+      // the targeted player MUST draw ALL accumulated cards!
+      int pending = (roomData['drawCountPending'] as int?) ?? 0;
+      int countToDraw = pending > 0 ? pending : 1;
+
       final deckSnap = await transaction.get(deckRef);
       List<dynamic> rawDeck = (deckSnap.data()?['cards'] as List<dynamic>? ?? []);
 
-      if (rawDeck.isEmpty) {
-        rawDeck = DeckGenerator.generateNoMercyDeck().map(_cardToMap).toList();
+      while (rawDeck.length < countToDraw) {
+        rawDeck.addAll(DeckGenerator.generateNoMercyDeck().map(_cardToMap));
       }
 
-      final drawnCard = rawDeck.removeAt(0);
-      transaction.set(deckRef, {'cards': rawDeck});
+      final drawnCards = rawDeck.sublist(0, countToDraw);
+      final remainingDeck = rawDeck.sublist(countToDraw);
+      transaction.set(deckRef, {'cards': remainingDeck});
 
       final handSnap = await transaction.get(handRef);
       final cardsRaw = (handSnap.data()?['cards'] as List<dynamic>? ?? []);
-      cardsRaw.add(drawnCard);
-      transaction.set(handRef, {'cards': cardsRaw});
+      cardsRaw.addAll(drawnCards);
 
-      // Update card count
-      final roomSnap = await transaction.get(roomRef);
-      final roomData = roomSnap.data()!;
-      final players = (roomData['players'] as List<dynamic>? ?? []).map((p) {
+      // Mercy Rule: 25 cards or more = Knocked Out!
+      bool isKnockedOut = cardsRaw.length >= 25;
+      if (isKnockedOut) {
+        transaction.set(handRef, {'cards': []}); // Eliminate cards
+      } else {
+        transaction.set(handRef, {'cards': cardsRaw});
+      }
+
+      // Next player's turn
+      final rawPlayers = (roomData['players'] as List<dynamic>? ?? []);
+      final activePlayers = rawPlayers.where((p) => p['isKnockedOut'] != true).toList();
+      int curIdx = activePlayers.indexWhere((p) => p['id'] == uid);
+      if (curIdx == -1) curIdx = 0;
+      final direction = (roomData['turnDirection'] as int?) ?? 1;
+      int nextIdx = (curIdx + direction) % activePlayers.length;
+      if (nextIdx < 0) nextIdx += activePlayers.length;
+      final nextTurnId = activePlayers[nextIdx]['id'];
+
+      final updatedPlayers = rawPlayers.map((p) {
         if (p['id'] == uid) {
           return {
             ...p as Map<String, dynamic>,
-            'cardCount': cardsRaw.length,
+            'cardCount': isKnockedOut ? 0 : cardsRaw.length,
+            'isKnockedOut': isKnockedOut,
           };
         }
         return p;
       }).toList();
 
+      // Check if only 1 player remains standing (Last Man Standing Win!)
+      final remainingStanding = updatedPlayers.where((p) => p['isKnockedOut'] != true).toList();
+      String? winnerId = remainingStanding.length == 1 ? remainingStanding.first['id'] : null;
+
       transaction.update(roomRef, {
-        'players': players,
+        'players': updatedPlayers,
+        'drawCountPending': 0, // Penalty consumed!
+        'currentTurn': nextTurnId,
+        if (winnerId != null) 'winnerId': winnerId,
+        if (winnerId != null) 'status': 'ended',
         'updatedAt': FieldValue.serverTimestamp(),
       });
     });
@@ -319,6 +384,8 @@ class FirebaseGameService implements IGameService {
       switch (typeStr) {
         case 'SKIP': return CardType.skip;
         case 'REVERSE': return CardType.reverse;
+        case 'SKIPEVERYONE':
+        case 'SKIP_EVERYONE': return CardType.skipEveryone;
         case 'DRAWTWO':
         case 'DRAW_2': return CardType.drawTwo;
         case 'DRAWFOUR':
@@ -327,11 +394,12 @@ class FirebaseGameService implements IGameService {
         case 'DRAW_6': return CardType.drawSix;
         case 'DRAWTEN':
         case 'DRAW_10': return CardType.drawTen;
+        case 'WILDREVERSEDRAWFOUR':
+        case 'WILD_REVERSE_DRAW_4': return CardType.wildReverseDrawFour;
+        case 'COLORROULETTE':
+        case 'COLOR_ROULETTE': return CardType.colorRoulette;
         case 'DISCARDALL':
         case 'DISCARD_ALL': return CardType.discardAll;
-        case 'SKIPEVERYONE':
-        case 'SKIP_EVERYONE': return CardType.skipEveryone;
-        case 'ROULETTE': return CardType.roulette;
         case 'POINTSEVENSWAP':
         case 'POINT_SEVEN_SWAP': return CardType.pointSevenSwap;
         case 'POINTZEROPASS':

@@ -2,7 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:uno_no_mercy/models/uno_card.dart';
 
 void main() {
-  group('UnoCard Tests', () {
+  group('Official UNO Show em No Mercy Rules Tests', () {
     test('Number matching works correctly', () {
       const topCard = UnoCard(
         id: '1',
@@ -37,7 +37,7 @@ void main() {
       expect(differentCard.canPlayOn(topCard), isFalse);
     });
 
-    test('Wild card can be played on any card', () {
+    test('Wild cards can be played on any card', () {
       const topCard = UnoCard(
         id: '1',
         color: CardColor.red,
@@ -45,17 +45,24 @@ void main() {
         numberValue: 5,
       );
 
-      const wildCard = UnoCard(
+      const wildTen = UnoCard(
         id: 'w1',
         color: CardColor.wild,
-        type: CardType.drawFour,
+        type: CardType.drawTen,
       );
 
-      expect(wildCard.canPlayOn(topCard), isTrue);
+      const wildRevFour = UnoCard(
+        id: 'w2',
+        color: CardColor.wild,
+        type: CardType.wildReverseDrawFour,
+      );
+
+      expect(wildTen.canPlayOn(topCard), isTrue);
+      expect(wildRevFour.canPlayOn(topCard), isTrue);
     });
 
-    test('No Mercy Stacking rule requires equal or higher draw card', () {
-      const activeDrawCard = UnoCard(
+    test('Official Stacking Rule: can only stack equal or higher penalty value', () {
+      const activeDrawFour = UnoCard(
         id: 'd1',
         color: CardColor.red,
         type: CardType.drawFour,
@@ -79,15 +86,14 @@ void main() {
         type: CardType.drawTen,
       );
 
-      // When there is an active stacking penalty (> 0):
-      // Draw Two (+2) cannot stack on Draw Four (+4)
-      expect(drawTwo.canPlayOn(activeDrawCard, pendingDrawCount: 4), isFalse);
-      
-      // Draw Six (+6) can stack on Draw Four (+4)
-      expect(drawSix.canPlayOn(activeDrawCard, pendingDrawCount: 4), isTrue);
-      
-      // Draw Ten (+10) can stack on Draw Four (+4)
-      expect(drawTen.canPlayOn(activeDrawCard, pendingDrawCount: 4), isTrue);
+      // +2 cannot stack on +4
+      expect(drawTwo.canPlayOn(activeDrawFour, pendingDrawCount: 4), isFalse);
+
+      // +6 can stack on +4
+      expect(drawSix.canPlayOn(activeDrawFour, pendingDrawCount: 4), isTrue);
+
+      // +10 can stack on +4 or +6
+      expect(drawTen.canPlayOn(activeDrawFour, pendingDrawCount: 4), isTrue);
     });
   });
 }

@@ -8,6 +8,7 @@ export type CardType =
   | 'DRAW_4'
   | 'DRAW_6'
   | 'DRAW_10'
+  | 'WILD_REVERSE_DRAW_4'
   | 'DISCARD_ALL'
   | 'SKIP_EVERYONE'
   | 'ROULETTE'
