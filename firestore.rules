@@ -1,0 +1,43 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Room Document
+    match /rooms/{roomId} {
+      // Any authenticated user can read public room state (top card, turn, players summary)
+      allow read: if isAuthenticated();
+      
+      // Clients are NOT allowed to write/mutate room document directly to prevent cheating
+      allow write: if false;
+
+      // Private Hand of Player (STRICT CARD PRIVACY)
+      match /private_hands/{playerId} {
+        // Only the player themselves can read their own cards!
+        // No client can read opponents' cards!
+        allow read: if isAuthenticated() && request.auth.uid == playerId;
+        // All mutations are executed strictly by Cloud Functions
+        allow write: if false;
+      }
+
+      // Deck (Draw pile) - Strictly hidden from all clients
+      match /deck/{docId} {
+        allow read, write: if false;
+      }
+
+      // Realtime in-game text chat
+      match /chat/{messageId} {
+        allow read: if isAuthenticated();
+        allow create: if isAuthenticated() && 
+          request.resource.data.senderId == request.auth.uid &&
+          request.resource.data.text is string &&
+          request.resource.data.text.size() <= 200;
+        allow update, delete: if false;
+      }
+    }
+  }
+}
