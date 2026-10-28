@@ -3,11 +3,12 @@ import 'package:flutter/material.dart';
 class UnoColors {
   UnoColors._();
 
-  // Classic & No Mercy vibrant colors
-  static const Color red = Color(0xFFF22424);
-  static const Color blue = Color(0xFF1E88E5);
-  static const Color green = Color(0xFF00C853);
-  static const Color yellow = Color(0xFFFFD600);
+  // Official Show 'em No Mercy physical print colors
+  static const Color red = Color(0xFFE51D24);
+  static const Color blue = Color(0xFF0D68B3);
+  static const Color green = Color(0xFF2E8540);
+  static const Color yellow = Color(0xFFFDB800);
+  static const Color cardBlack = Color(0xFF0D0D0E);
   
   // No Mercy dark theme backgrounds
   static const Color background = Color(0xFF121216);
