@@ -93,7 +93,7 @@ class LocalGameService implements IGameService {
         const UnoCard(id: 'c2', color: CardColor.blue, type: CardType.number, numberValue: 7),
         const UnoCard(id: 'c3', color: CardColor.wild, type: CardType.drawSix),
         const UnoCard(id: 'c4', color: CardColor.wild, type: CardType.drawTen),
-        const UnoCard(id: 'c5', color: CardColor.green, type: CardType.drawTwo),
+        const UnoCard(id: 'c5', color: CardColor.green, type: CardType.discardAll),
         const UnoCard(id: 'c6', color: CardColor.yellow, type: CardType.skipEveryone),
         const UnoCard(id: 'c7', color: CardColor.yellow, type: CardType.pointSevenSwap),
       ],

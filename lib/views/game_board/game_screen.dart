@@ -330,13 +330,28 @@ class _GameScreenState extends State<GameScreen> {
       }
     }
 
+    // 3. If Discard All card, ask player which matching card should be placed on TOP!
+    String? discardAllTopCardId;
+    UnoCard cardToAnimate = card;
+    if (card.type == CardType.discardAll) {
+      final matchingColorCards = _playerHand.where((c) => c.color == card.color).toList();
+      if (matchingColorCards.length > 1) {
+        final chosenTopCard = await _showDiscardAllTopCardDialog(matchingColorCards, card);
+        if (chosenTopCard == null) return; // User cancelled
+        discardAllTopCardId = chosenTopCard.id;
+        cardToAnimate = chosenTopCard;
+      } else {
+        discardAllTopCardId = card.id;
+      }
+    }
+
     final screenSize = MediaQuery.of(context).size;
     final startOffset = Offset(screenSize.width * 0.4, screenSize.height * 0.7);
     final endOffset = Offset(screenSize.width * 0.5 - 45, screenSize.height * 0.38);
 
     setState(() {
       _flyingCardWidget = FlyingCardAnimation(
-        card: card,
+        card: cardToAnimate,
         startOffset: startOffset,
         endOffset: endOffset,
         onCompleted: () async {
@@ -351,6 +366,7 @@ class _GameScreenState extends State<GameScreen> {
             cardId: card.id,
             chosenColor: chosenColor,
             swapTargetPlayerId: swapTargetPlayerId,
+            discardAllTopCardId: discardAllTopCardId,
           );
 
           if (card.type == CardType.skipEveryone && mounted) {
@@ -359,6 +375,15 @@ class _GameScreenState extends State<GameScreen> {
               const SnackBar(
                 content: Text('⚡ ALL SKIP! ബാക്കി എല്ലാവരെയും സ്കിപ്പ് ചെയ്തു. നിങ്ങൾ വീണ്ടും കളിക്കുക!'),
                 backgroundColor: Colors.amber,
+                duration: Duration(seconds: 2),
+              ),
+            );
+          } else if (card.type == CardType.discardAll && mounted) {
+            ScaffoldMessenger.of(context).hideCurrentSnackBar();
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('💥 DISCARD ALL! ആ കളറിലുള്ള എല്ലാ കാർഡുകളും ഡിസ്കാർഡ് ചെയ്തു!'),
+                backgroundColor: Colors.deepPurpleAccent,
                 duration: Duration(seconds: 2),
               ),
             );

@@ -31,6 +31,7 @@ class DeckGenerator {
         deck.add(UnoCard(id: 'c_${counter++}', color: color, type: CardType.skipEveryone));
         deck.add(UnoCard(id: 'c_${counter++}', color: color, type: CardType.drawTwo));
         deck.add(UnoCard(id: 'c_${counter++}', color: color, type: CardType.drawFour));
+        deck.add(UnoCard(id: 'c_${counter++}', color: color, type: CardType.discardAll));
       }
     }
 

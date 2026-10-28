@@ -61,6 +61,15 @@ void main() {
       expect(wildRevFour.canPlayOn(topCard), isTrue);
     });
 
+    test('Discard All can be played on matching color card', () {
+      const redTopCard = UnoCard(id: 'r1', color: CardColor.red, type: CardType.number, numberValue: 3);
+      const blueTopCard = UnoCard(id: 'b1', color: CardColor.blue, type: CardType.number, numberValue: 3);
+      const redDiscardAll = UnoCard(id: 'da1', color: CardColor.red, type: CardType.discardAll);
+
+      expect(redDiscardAll.canPlayOn(redTopCard), isTrue);
+      expect(redDiscardAll.canPlayOn(blueTopCard), isFalse);
+    });
+
     test('Official Stacking Rule: can only stack equal or higher penalty value', () {
       const activeDrawFour = UnoCard(
         id: 'd1',
