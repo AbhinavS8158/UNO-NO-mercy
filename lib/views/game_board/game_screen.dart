@@ -1243,28 +1243,30 @@ class _GameScreenState extends State<GameScreen> {
                     elevation: 3,
                   ),
                 ),
-              const SizedBox(width: 8),
-              ElevatedButton(
-                onPressed: () async {
-                  final effectiveRoomId = widget.roomId.isNotEmpty ? widget.roomId : widget.roomCode;
-                  await _gameService.callUno(
-                    roomId: effectiveRoomId,
-                    callerName: widget.playerName,
-                  );
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: UnoColors.yellow,
-                  foregroundColor: Colors.black,
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                  elevation: 4,
-                  shadowColor: UnoColors.yellow.withOpacity(0.5),
+              if (_playerHand.length == 1) ...[
+                const SizedBox(width: 8),
+                ElevatedButton(
+                  onPressed: () async {
+                    final effectiveRoomId = widget.roomId.isNotEmpty ? widget.roomId : widget.roomCode;
+                    await _gameService.callUno(
+                      roomId: effectiveRoomId,
+                      callerName: widget.playerName,
+                    );
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: UnoColors.yellow,
+                    foregroundColor: Colors.black,
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    elevation: 4,
+                    shadowColor: UnoColors.yellow.withOpacity(0.5),
+                  ),
+                  child: Text(
+                    'UNO!',
+                    style: GoogleFonts.rubik(fontSize: 13, fontWeight: FontWeight.w900, letterSpacing: 1.0),
+                  ),
                 ),
-                child: Text(
-                  'UNO!',
-                  style: GoogleFonts.rubik(fontSize: 13, fontWeight: FontWeight.w900, letterSpacing: 1.0),
-                ),
-              ),
+              ],
             ],
           ),
         ],
