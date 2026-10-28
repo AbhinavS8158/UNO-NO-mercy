@@ -181,6 +181,13 @@ class FirebaseGameService implements IGameService {
       final playedCardMap = cardsRaw[cardIndex];
       final playedCard = _mapToCard(playedCardMap as Map<String, dynamic>);
 
+      // Validate play legality against current server room state (Stacking & Color rules)
+      int currentPending = (roomData['drawCountPending'] as int?) ?? 0;
+      final serverTopCard = _mapToCard(roomData['topCard'] as Map<String, dynamic>? ?? {});
+      if (!playedCard.canPlayOn(serverTopCard, pendingDrawCount: currentPending)) {
+        return; // Reject illegal move
+      }
+
       // 2. Discard All Rule:
       // Discards every card in hand that matches this card's color!
       // The player chooses which card is placed on top of the discard pile.
@@ -198,7 +205,6 @@ class FirebaseGameService implements IGameService {
       }
 
       // 3. Stacking Penalty Calculation:
-      int currentPending = (roomData['drawCountPending'] as int?) ?? 0;
       if (playedCard.isDrawPenalty) {
         currentPending += playedCard.penaltyCount;
       }

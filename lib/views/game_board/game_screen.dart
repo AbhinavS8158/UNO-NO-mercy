@@ -295,11 +295,18 @@ class _GameScreenState extends State<GameScreen> {
 
     // Validate Playability
     if (!card.canPlayOn(_topCard, pendingDrawCount: _pendingDrawCount)) {
+      String reason = '${card.displayLabel} ഈ സമയത്ത് കളിക്കാൻ കഴിയില്ല!';
+      if (_pendingDrawCount > 0) {
+        reason = '+$_pendingDrawCount പെനാൽറ്റി നിലവിലുണ്ട്! +${_topCard.penaltyCount} അല്ലെങ്കിൽ അതിൽ കൂടുതൽ ഉള്ള ഡ്രോ കാർഡ് മാത്രമേ സ്റ്റാക്ക് ചെയ്യാൻ പറ്റൂ (അല്ലെങ്കിൽ കാർഡ് ഡ്രോ ചെയ്യുക).';
+      } else if (card.isDrawPenalty && _topCard.isDrawPenalty && card.penaltyCount < _topCard.penaltyCount) {
+        reason = '+${_topCard.penaltyCount}-ന് മുകളിൽ ചെറിയ പെനാൽറ്റി കാർഡ് (${card.displayLabel}) വെക്കാൻ കഴിയില്ല! (No Lower Stacking)';
+      }
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('${card.displayLabel} ഈ സമയത്ത് കളിക്കാൻ കഴിയില്ല! (No Mercy Stacking Rule)'),
+          content: Text(reason, style: const TextStyle(fontWeight: FontWeight.bold)),
           backgroundColor: Colors.redAccent,
-          duration: const Duration(milliseconds: 1500),
+          duration: const Duration(seconds: 2),
         ),
       );
       return;

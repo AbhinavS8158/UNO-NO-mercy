@@ -96,6 +96,8 @@ class GameRoom {
         case 'DRAW_4': return CardType.drawFour;
         case 'DRAW_6': return CardType.drawSix;
         case 'DRAW_10': return CardType.drawTen;
+        case 'WILD_REVERSE_DRAW_4': return CardType.wildReverseDrawFour;
+        case 'COLOR_ROULETTE': return CardType.colorRoulette;
         case 'DISCARD_ALL': return CardType.discardAll;
         case 'SKIP_EVERYONE': return CardType.skipEveryone;
         case 'ROULETTE': return CardType.roulette;

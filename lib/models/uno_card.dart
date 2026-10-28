@@ -128,9 +128,22 @@ class UnoCard {
   }
 
   bool canPlayOn(UnoCard topCard, {int pendingDrawCount = 0}) {
-    // 1. Official Stacking:
+    // 1. Official Stacking Rule:
+    // When a player receives a draw penalty (pendingDrawCount > 0), only equal or higher-value
+    // draw cards can be stacked (+2 on +2; +4/+6/+10 on +4; +6/+10 on +6; +10 on +10).
+    // Lower-value draw cards (+2 on +4; +2/+4 on +6; +2/+4/+6 on +10) and ALL non-draw cards CANNOT be played.
     if (pendingDrawCount > 0) {
-      return isDrawPenalty && penaltyCount >= topCard.penaltyCount;
+      if (!isDrawPenalty) return false;
+      return penaltyCount >= topCard.penaltyCount;
+    }
+
+    // Rule: Players CANNOT stack a lower-value draw card on top of a higher-value draw card,
+    // even if color matches or after penalties have been drawn.
+    // Top card +4: cannot stack +2.
+    // Top card +6: cannot stack +4, +2.
+    // Top card +10: cannot stack +6, +4, +2.
+    if (isDrawPenalty && topCard.isDrawPenalty && penaltyCount < topCard.penaltyCount) {
+      return false;
     }
 
     // 2. 0's Pass and 7's Swap can be played on ANY card regardless of color:
