@@ -76,7 +76,7 @@ void main() {
 
       const drawSix = UnoCard(
         id: 'd3',
-        color: CardColor.red,
+        color: CardColor.wild,
         type: CardType.drawSix,
       );
 
@@ -127,13 +127,17 @@ void main() {
 
     test('Strict UNO Mercy Card Stacking Rules Table', () {
       const topDrawFour = UnoCard(id: 'd4', color: CardColor.red, type: CardType.drawFour);
-      const topDrawSix = UnoCard(id: 'd6', color: CardColor.red, type: CardType.drawSix);
+      const topDrawSix = UnoCard(id: 'd6', color: CardColor.wild, type: CardType.drawSix);
       const topDrawTen = UnoCard(id: 'd10', color: CardColor.wild, type: CardType.drawTen);
 
       const drawTwo = UnoCard(id: 'p2', color: CardColor.red, type: CardType.drawTwo);
       const drawFour = UnoCard(id: 'p4', color: CardColor.red, type: CardType.drawFour);
-      const drawSix = UnoCard(id: 'p6', color: CardColor.red, type: CardType.drawSix);
+      const drawSix = UnoCard(id: 'p6', color: CardColor.wild, type: CardType.drawSix);
       const drawTen = UnoCard(id: 'p10', color: CardColor.wild, type: CardType.drawTen);
+
+      // Verify Wild status
+      expect(drawSix.isWild, isTrue);
+      expect(drawTen.isWild, isTrue);
 
       // 1. +4 on top: cannot stack +2. Can stack +4, +6, +10.
       expect(drawTwo.canPlayOn(topDrawFour, pendingDrawCount: 4), isFalse);

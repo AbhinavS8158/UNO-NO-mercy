@@ -393,7 +393,7 @@ class UnoCardWidget extends StatelessWidget {
     }
 
     // Wild Draw 6 (Image 2 Top-Right)
-    if (card.type == CardType.drawSix && card.isWild) {
+    if (card.type == CardType.drawSix) {
       return _buildWildDrawGraphic(count: 6);
     }
 

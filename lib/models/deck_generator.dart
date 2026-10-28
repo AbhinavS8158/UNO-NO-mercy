@@ -31,12 +31,12 @@ class DeckGenerator {
         deck.add(UnoCard(id: 'c_${counter++}', color: color, type: CardType.skipEveryone));
         deck.add(UnoCard(id: 'c_${counter++}', color: color, type: CardType.drawTwo));
         deck.add(UnoCard(id: 'c_${counter++}', color: color, type: CardType.drawFour));
-        deck.add(UnoCard(id: 'c_${counter++}', color: color, type: CardType.drawSix));
       }
     }
 
-    // Wild Specials: Wild Draw 10, Wild Reverse Draw 4, Wild Color Roulette
+    // Wild Specials: Wild Draw 6, Wild Draw 10, Wild Reverse Draw 4, Wild Color Roulette
     for (int i = 0; i < 4; i++) {
+      deck.add(UnoCard(id: 'c_${counter++}', color: CardColor.wild, type: CardType.drawSix));
       deck.add(UnoCard(id: 'c_${counter++}', color: CardColor.wild, type: CardType.drawTen));
       deck.add(UnoCard(id: 'c_${counter++}', color: CardColor.wild, type: CardType.wildReverseDrawFour));
       deck.add(UnoCard(id: 'c_${counter++}', color: CardColor.wild, type: CardType.colorRoulette));

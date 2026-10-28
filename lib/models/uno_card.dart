@@ -32,6 +32,7 @@ class UnoCard {
 
   bool get isWild =>
       color == CardColor.wild ||
+      type == CardType.drawSix ||
       type == CardType.drawTen ||
       type == CardType.wildReverseDrawFour ||
       type == CardType.colorRoulette ||
@@ -108,7 +109,7 @@ class UnoCard {
       case CardType.drawFour:
         return 'DRAW 4';
       case CardType.drawSix:
-        return 'DRAW 6';
+        return 'WILD +6';
       case CardType.drawTen:
         return 'WILD +10';
       case CardType.wildReverseDrawFour:
