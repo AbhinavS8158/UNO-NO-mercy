@@ -373,7 +373,7 @@ class _GameScreenState extends State<GameScreen> {
             ScaffoldMessenger.of(context).hideCurrentSnackBar();
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
-                content: Text('⚡ SKIP EVERYONE! ബാക്കി എല്ലാവരെയും സ്കിപ്പ് ചെയ്തു. നിങ്ങൾ വീണ്ടും കളിക്കുക!'),
+                content: Text('⚡ ALL SKIP! ബാക്കി എല്ലാവരെയും സ്കിപ്പ് ചെയ്തു. നിങ്ങൾ വീണ്ടും കളിക്കുക!'),
                 backgroundColor: Colors.amber,
                 duration: Duration(seconds: 2),
               ),

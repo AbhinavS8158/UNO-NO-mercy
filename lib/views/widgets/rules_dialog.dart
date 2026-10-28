@@ -58,9 +58,9 @@ class RulesDialog extends StatelessWidget {
 
                     const SizedBox(height: 14),
                     _buildSectionTitle('3. SPECIAL CARDS'),
-                    _buildRuleBadge('Skip ⊘', 'അടുത്ത കളിക്കാരന് ടേൺ നഷ്ടപ്പെടുന്നു.'),
+                    _buildRuleBadge('Single Skip ⊘', 'അടുത്ത കളിക്കാരന് മാത്രം ടേൺ നഷ്ടപ്പെടുന്നു (Single Skip).'),
                     _buildRuleBadge('Reverse ⇄', 'കളി നടക്കുന്ന ഡയറക്ഷൻ തിരിക്കുന്നു.'),
-                    _buildRuleBadge('Skip Everyone ALL ⊘', 'ബാക്കി എല്ലാവരെയും സ്കിപ്പ് ചെയ്ത് നിങ്ങൾക്ക് തന്നെ വീണ്ടും ടേൺ ലഭിക്കുന്നു.'),
+                    _buildRuleBadge('All Skip (Skip Everyone) ⊘', 'ബാക്കി എല്ലാവരെയും സ്കിപ്പ് ചെയ്ത് നിങ്ങൾക്ക് തന്നെ വീണ്ടും ടേൺ ലഭിക്കുന്നു (Double Skip ഇല്ല; Single Skip & All Skip മാത്രം).'),
                     _buildRuleBadge('Draw Cards (+2, +4, +6, +10)', 'അടുത്തയാൾ അത്രയും കാർഡുകൾ ഡ്രോ ചെയ്യണം (സ്റ്റാക്കിംഗ് നിയമം ബാധകം).'),
                     _buildRuleBadge('Discard All', 'ആ കളറിലുള്ള കയ്യിലെ എല്ലാ കാർഡുകളും ഒന്നിച്ചു കളയാം.'),
                     _buildRuleBadge('Wild Color Roulette 🎰', 'അടുത്ത കളിക്കാരൻ കളർ തിരഞ്ഞെടുത്ത് ആ കളർ കിട്ടുന്നതുവരെ കാർഡുകൾ ഡ്രോ ചെയ്യണം.'),

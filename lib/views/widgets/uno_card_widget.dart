@@ -316,17 +316,18 @@ class UnoCardWidget extends StatelessWidget {
       );
     }
 
-    // Skip Corner
+    // Skip Corner (Single Skip)
     if (card.type == CardType.skip) {
       return _buildSkipIcon(width * 0.16);
     }
 
-    // Skip Everyone Corner
+    // All Skip Corner (Skip Everyone - No Double Skip)
     if (card.type == CardType.skipEveryone) {
-      return Row(
+      return Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          _buildSkipIcon(width * 0.12),
+          _buildOutlinedText('ALL', numSize * 0.65, strokeWidth: strokeW * 0.8),
+          SizedBox(height: width * 0.005),
           _buildSkipIcon(width * 0.12),
         ],
       );
@@ -415,21 +416,19 @@ class UnoCardWidget extends StatelessWidget {
       );
     }
 
-    // Skip
+    // Skip (Single Skip)
     if (card.type == CardType.skip) {
       return _buildSkipIcon(width * 0.46, strokeWidth: width * 0.05);
     }
 
-    // Skip Everyone
+    // All Skip (Skip Everyone: Distinctive single skip icon with bold ALL)
     if (card.type == CardType.skipEveryone) {
-      return Row(
+      return Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          _buildSkipIcon(width * 0.28, strokeWidth: width * 0.035),
-          Transform.translate(
-            offset: Offset(-width * 0.08, 0),
-            child: _buildSkipIcon(width * 0.28, strokeWidth: width * 0.035),
-          ),
+          _buildSkipIcon(width * 0.38, strokeWidth: width * 0.045),
+          SizedBox(height: width * 0.015),
+          _buildOutlinedText('ALL', width * 0.22, strokeWidth: width * 0.035),
         ],
       );
     }

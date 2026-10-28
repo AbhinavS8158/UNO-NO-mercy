@@ -102,7 +102,7 @@ class UnoCard {
       case CardType.reverse:
         return 'REVERSE';
       case CardType.skipEveryone:
-        return 'SKIP EVERYONE';
+        return 'ALL SKIP';
       case CardType.drawTwo:
         return 'DRAW 2';
       case CardType.drawFour:
