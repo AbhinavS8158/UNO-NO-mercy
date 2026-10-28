@@ -11,20 +11,20 @@ class FirebaseGameService implements IGameService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
-  String? _cachedUserId;
+  static String? _staticCachedUserId;
 
   Future<String> _ensureAuthenticated() async {
     if (_auth.currentUser != null) {
-      _cachedUserId = _auth.currentUser!.uid;
-      return _cachedUserId!;
+      _staticCachedUserId = _auth.currentUser!.uid;
+      return _staticCachedUserId!;
     }
     final cred = await _auth.signInAnonymously();
-    _cachedUserId = cred.user!.uid;
-    return _cachedUserId!;
+    _staticCachedUserId = cred.user!.uid;
+    return _staticCachedUserId!;
   }
 
   @override
-  String get currentUid => _auth.currentUser?.uid ?? _cachedUserId ?? 'player_me';
+  String get currentUid => _auth.currentUser?.uid ?? _staticCachedUserId ?? 'player_me';
 
   @override
   Future<Map<String, String>> createRoom({
@@ -167,7 +167,7 @@ class FirebaseGameService implements IGameService {
       // STRICT TURN ENFORCEMENT: Only currentTurn player can play!
       final currentTurn = roomData['currentTurn'] as String?;
       if (currentTurn != null && currentTurn.isNotEmpty && currentTurn != uid) {
-        return; // Reject play if not player's turn
+        throw Exception('ഇപ്പോൾ നിങ്ങളുടെ ടേൺ അല്ല!');
       }
 
       // 1. Retrieve player's hand
@@ -176,7 +176,9 @@ class FirebaseGameService implements IGameService {
       final cardsRaw = (handSnap.data()?['cards'] as List<dynamic>? ?? []);
 
       final cardIndex = cardsRaw.indexWhere((c) => c['id'] == cardId);
-      if (cardIndex == -1) return;
+      if (cardIndex == -1) {
+        throw Exception('ഈ കാർഡ് നിങ്ങളുടെ കയ്യിൽ ഇല്ല!');
+      }
 
       final playedCardMap = cardsRaw[cardIndex];
       final playedCard = _mapToCard(playedCardMap as Map<String, dynamic>);
@@ -186,7 +188,7 @@ class FirebaseGameService implements IGameService {
       final serverTopCard = _mapToCard(roomData['topCard'] as Map<String, dynamic>? ?? {});
       final serverActiveColor = _parseColor(roomData['activeColor'] as String?);
       if (!playedCard.canPlayOn(serverTopCard, pendingDrawCount: currentPending, activeColor: serverActiveColor)) {
-        return; // Reject illegal move
+        throw Exception('നിയമപ്രകാരം ഈ കാർഡ് ഇപ്പോൾ വെക്കാൻ കഴിയില്ല!');
       }
 
       // 2. Discard All Rule:
@@ -226,7 +228,7 @@ class FirebaseGameService implements IGameService {
       if (playedCard.type == CardType.skipEveryone) {
         // Skip Everyone: skips ALL other players, current player plays again!
         nextTurnId = uid;
-      } else {
+      } else if (activePlayers.isNotEmpty) {
         int steps = (playedCard.type == CardType.skip) ? 2 : 1;
         int nextIdx = (curIdx + direction * steps) % activePlayers.length;
         if (nextIdx < 0) nextIdx += activePlayers.length;
@@ -362,12 +364,15 @@ class FirebaseGameService implements IGameService {
       // Next player's turn
       final rawPlayers = (roomData['players'] as List<dynamic>? ?? []);
       final activePlayers = rawPlayers.where((p) => p['isKnockedOut'] != true).toList();
-      int curIdx = activePlayers.indexWhere((p) => p['id'] == uid);
-      if (curIdx == -1) curIdx = 0;
-      final direction = (roomData['turnDirection'] as int?) ?? 1;
-      int nextIdx = (curIdx + direction) % activePlayers.length;
-      if (nextIdx < 0) nextIdx += activePlayers.length;
-      final nextTurnId = activePlayers[nextIdx]['id'];
+      String nextTurnId = uid;
+      if (activePlayers.isNotEmpty) {
+        int curIdx = activePlayers.indexWhere((p) => p['id'] == uid);
+        if (curIdx == -1) curIdx = 0;
+        final direction = (roomData['turnDirection'] as int?) ?? 1;
+        int nextIdx = (curIdx + direction) % activePlayers.length;
+        if (nextIdx < 0) nextIdx += activePlayers.length;
+        nextTurnId = activePlayers[nextIdx]['id'];
+      }
 
       final updatedPlayers = rawPlayers.map((p) {
         if (p['id'] == uid) {
@@ -420,12 +425,15 @@ class FirebaseGameService implements IGameService {
 
       final rawPlayers = (roomData['players'] as List<dynamic>? ?? []);
       final activePlayers = rawPlayers.where((p) => p['isKnockedOut'] != true).toList();
-      int curIdx = activePlayers.indexWhere((p) => p['id'] == uid);
-      if (curIdx == -1) curIdx = 0;
-      final direction = (roomData['turnDirection'] as int?) ?? 1;
-      int nextIdx = (curIdx + direction) % activePlayers.length;
-      if (nextIdx < 0) nextIdx += activePlayers.length;
-      final nextTurnId = activePlayers[nextIdx]['id'];
+      String nextTurnId = uid;
+      if (activePlayers.isNotEmpty) {
+        int curIdx = activePlayers.indexWhere((p) => p['id'] == uid);
+        if (curIdx == -1) curIdx = 0;
+        final direction = (roomData['turnDirection'] as int?) ?? 1;
+        int nextIdx = (curIdx + direction) % activePlayers.length;
+        if (nextIdx < 0) nextIdx += activePlayers.length;
+        nextTurnId = activePlayers[nextIdx]['id'];
+      }
 
       transaction.update(roomRef, {
         'currentTurn': nextTurnId,

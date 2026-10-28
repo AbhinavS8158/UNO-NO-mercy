@@ -21,12 +21,16 @@ class GameScreen extends StatefulWidget {
   final String roomId;
   final String roomCode;
   final String playerName;
+  final String? playerId;
+  final IGameService? gameService;
 
   const GameScreen({
     super.key,
     this.roomId = '',
     this.roomCode = 'UNO7K2',
     this.playerName = 'Player 1',
+    this.playerId,
+    this.gameService,
   });
 
   @override
@@ -60,6 +64,7 @@ class _GameScreenState extends State<GameScreen> {
     numberValue: 7,
   );
   String? _previousTopCardId;
+  String? _previousTurn;
   CardColor _activeColor = CardColor.red;
   int _pendingDrawCount = 0;
   bool _isClockwise = true;
@@ -71,6 +76,11 @@ class _GameScreenState extends State<GameScreen> {
   UnoCard? _selectedCard;
   bool _hasDrawnThisTurn = false;
 
+  // Concurrency & deadlock prevention locks
+  bool _isProcessingMove = false;
+  bool _isDrawingCard = false;
+  bool _isPassingTurn = false;
+
   // Active Real Opponents (Only players who actually joined this room!)
   List<PlayerSummary> _allPlayers = [];
   List<PlayerSummary> _opponents = [];
@@ -79,24 +89,51 @@ class _GameScreenState extends State<GameScreen> {
   // Flying Card Animation
   Widget? _flyingCardWidget;
 
+  String? _resolvedUid;
+
   String get _myUid {
-    if (_gameService is FirebaseGameService) {
-      return (_gameService as FirebaseGameService).currentUid;
+    if (widget.playerId != null && widget.playerId!.isNotEmpty) {
+      return widget.playerId!;
     }
-    return 'player_me';
+    if (_resolvedUid != null && _resolvedUid!.isNotEmpty) {
+      return _resolvedUid!;
+    }
+    if (_gameService is FirebaseGameService) {
+      final uid = (_gameService as FirebaseGameService).currentUid;
+      if (uid != 'player_me') return uid;
+    }
+    return _resolvedUid ?? 'player_me';
   }
 
   @override
   void initState() {
     super.initState();
-    if (Firebase.apps.isNotEmpty) {
+    if (widget.gameService != null) {
+      _gameService = widget.gameService!;
+    } else if (Firebase.apps.isNotEmpty) {
       _gameService = FirebaseGameService();
     } else {
       _gameService = LocalGameService();
     }
 
+    _resolvedUid = widget.playerId;
+
     _initGameStreams();
     _initVoiceChannel();
+  }
+
+  void _subscribeHand(String effectiveRoomId, String targetUid) {
+    _handSubscription?.cancel();
+    _handSubscription = _gameService.streamPrivateHand(effectiveRoomId, targetUid).listen((hand) {
+      if (!mounted) return;
+      setState(() {
+        _playerHand = hand;
+        // Check 25 cards mercy rule
+        if (_playerHand.length >= 25) {
+          _showMercyKnockoutDialog();
+        }
+      });
+    });
   }
 
   void _initGameStreams() {
@@ -110,14 +147,31 @@ class _GameScreenState extends State<GameScreen> {
         _activeColor = room.activeColor;
         _pendingDrawCount = room.drawCountPending;
         _isClockwise = room.turnDirection == 1;
-        _currentTurn = room.currentTurn;
         _remainingDeckCount = room.remainingDeckCount;
+
+        // Reset turn draw flag whenever turn changes!
+        if (_previousTurn != null && _previousTurn != room.currentTurn) {
+          _hasDrawnThisTurn = false;
+          _selectedCard = null;
+        }
+        _previousTurn = room.currentTurn;
+        _currentTurn = room.currentTurn;
+
         if (room.currentTurn != _myUid) {
           _hasDrawnThisTurn = false;
         }
 
         // Keep full list of players in room
         _allPlayers = room.players;
+
+        // Resolve UID if it was falling back to player_me
+        if (_resolvedUid == null || _resolvedUid == 'player_me') {
+          final match = room.players.where((p) => p.name == widget.playerName);
+          if (match.isNotEmpty) {
+            _resolvedUid = match.first.id;
+            _subscribeHand(effectiveRoomId, _resolvedUid!);
+          }
+        }
 
         // Filter out ME: Show ONLY real opponents who joined this room!
         _opponents = room.players.where((p) => p.id != _myUid).toList();
@@ -167,16 +221,7 @@ class _GameScreenState extends State<GameScreen> {
     });
 
     // 2. Listen to My Own Unique Private Hand
-    _handSubscription = _gameService.streamPrivateHand(effectiveRoomId, _myUid).listen((hand) {
-      if (!mounted) return;
-      setState(() {
-        _playerHand = hand;
-        // Check 25 cards mercy rule
-        if (_playerHand.length >= 25) {
-          _showMercyKnockoutDialog();
-        }
-      });
-    });
+    _subscribeHand(effectiveRoomId, _myUid);
 
     // 3. Listen to Real-time In-Game Chat & Taunts (5-second fade bubble)
     bool isFirstLoad = true;
@@ -273,6 +318,7 @@ class _GameScreenState extends State<GameScreen> {
   }
 
   void _handleCardPlayed(UnoCard card) async {
+    if (_isProcessingMove) return;
     final isMyTurn = _currentTurn == _myUid || _currentTurn.isEmpty;
     if (!isMyTurn) {
       String activePlayerName = 'Opponent';
@@ -312,108 +358,135 @@ class _GameScreenState extends State<GameScreen> {
       return;
     }
 
-    // 1. If Wild card, prompt for color selection
-    CardColor chosenColor = card.color;
-    if (card.isWild) {
-      final selectedColor = await _showColorPickerDialog();
-      if (selectedColor == null) return; // User cancelled
-      chosenColor = selectedColor;
-    }
-
-    // 2. If 7's Swap card, prompt for target player selection
-    String? swapTargetPlayerId;
-    if (card.type == CardType.pointSevenSwap && _opponents.isNotEmpty) {
-      if (_opponents.length == 1) {
-        swapTargetPlayerId = _opponents.first.id;
-      } else {
-        swapTargetPlayerId = await _showSwapTargetDialog();
+    _isProcessingMove = true;
+    try {
+      // 1. If Wild card, prompt for color selection
+      CardColor chosenColor = card.color;
+      if (card.isWild) {
+        final selectedColor = await _showColorPickerDialog();
+        if (selectedColor == null) {
+          _isProcessingMove = false;
+          return; // User cancelled
+        }
+        chosenColor = selectedColor;
       }
-    }
 
-    // 3. If Discard All card, ask player which matching card should be placed on TOP!
-    String? discardAllTopCardId;
-    UnoCard cardToAnimate = card;
-    if (card.type == CardType.discardAll) {
-      final matchingColorCards = _playerHand.where((c) => c.color == card.color).toList();
-      if (matchingColorCards.length > 1) {
-        final chosenTopCard = await _showDiscardAllTopCardDialog(matchingColorCards, card);
-        if (chosenTopCard == null) return; // User cancelled
-        discardAllTopCardId = chosenTopCard.id;
-        cardToAnimate = chosenTopCard;
-      } else {
-        discardAllTopCardId = card.id;
+      // 2. If 7's Swap card, prompt for target player selection
+      String? swapTargetPlayerId;
+      if (card.type == CardType.pointSevenSwap && _opponents.isNotEmpty) {
+        if (_opponents.length == 1) {
+          swapTargetPlayerId = _opponents.first.id;
+        } else {
+          swapTargetPlayerId = await _showSwapTargetDialog();
+        }
       }
-    }
 
-    final screenSize = MediaQuery.of(context).size;
-    final startOffset = Offset(screenSize.width * 0.4, screenSize.height * 0.7);
-    final endOffset = Offset(screenSize.width * 0.5 - 45, screenSize.height * 0.38);
-
-    setState(() {
-      _flyingCardWidget = FlyingCardAnimation(
-        card: cardToAnimate,
-        startOffset: startOffset,
-        endOffset: endOffset,
-        onCompleted: () async {
-          setState(() {
-            _flyingCardWidget = null;
-            _selectedCard = null;
-            _hasDrawnThisTurn = false;
-            // Optimistically update top card and active color immediately
-            _topCard = cardToAnimate;
-            if (chosenColor != CardColor.wild) {
-              _activeColor = chosenColor;
-            }
-          });
-          // Commit move to Firebase Server
-          await _gameService.playCard(
-            roomId: effectiveRoomId,
-            cardId: card.id,
-            chosenColor: chosenColor,
-            swapTargetPlayerId: swapTargetPlayerId,
-            discardAllTopCardId: discardAllTopCardId,
-          );
-
-          if (card.type == CardType.skipEveryone && mounted) {
-            ScaffoldMessenger.of(context).hideCurrentSnackBar();
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('⚡ ALL SKIP! ബാക്കി എല്ലാവരെയും സ്കിപ്പ് ചെയ്തു. നിങ്ങൾ വീണ്ടും കളിക്കുക!'),
-                backgroundColor: Colors.amber,
-                duration: Duration(seconds: 2),
-              ),
-            );
-          } else if (card.type == CardType.discardAll && mounted) {
-            ScaffoldMessenger.of(context).hideCurrentSnackBar();
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('💥 DISCARD ALL! ആ കളറിലുള്ള എല്ലാ കാർഡുകളും ഡിസ്കാർഡ് ചെയ്തു!'),
-                backgroundColor: Colors.deepPurpleAccent,
-                duration: Duration(seconds: 2),
-              ),
-            );
-          } else if (card.type == CardType.pointSevenSwap && mounted) {
-            ScaffoldMessenger.of(context).hideCurrentSnackBar();
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('⇄ 7 SWAP! കാർഡുകൾ പരസ്പരം കൈമാറി!'),
-                backgroundColor: Colors.purpleAccent,
-                duration: Duration(seconds: 2),
-              ),
-            );
-          } else if (card.type == CardType.pointZeroPass && mounted) {
-            ScaffoldMessenger.of(context).hideCurrentSnackBar();
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('🔄 0 PASS! കാർഡുകൾ അടുത്തയാൾക്ക് കൈമാറി!'),
-                backgroundColor: Colors.teal,
-                duration: Duration(seconds: 2),
-              ),
-            );
+      // 3. If Discard All card, ask player which matching card should be placed on TOP!
+      String? discardAllTopCardId;
+      UnoCard cardToAnimate = card;
+      if (card.type == CardType.discardAll) {
+        final matchingColorCards = _playerHand.where((c) => c.color == card.color).toList();
+        if (matchingColorCards.length > 1) {
+          final chosenTopCard = await _showDiscardAllTopCardDialog(matchingColorCards, card);
+          if (chosenTopCard == null) {
+            _isProcessingMove = false;
+            return; // User cancelled
           }
-        },
-      );
-    });
+          discardAllTopCardId = chosenTopCard.id;
+          cardToAnimate = chosenTopCard;
+        } else {
+          discardAllTopCardId = card.id;
+        }
+      }
+
+      final screenSize = MediaQuery.of(context).size;
+      final startOffset = Offset(screenSize.width * 0.4, screenSize.height * 0.7);
+      final endOffset = Offset(screenSize.width * 0.5 - 45, screenSize.height * 0.38);
+
+      setState(() {
+        _flyingCardWidget = FlyingCardAnimation(
+          card: cardToAnimate,
+          startOffset: startOffset,
+          endOffset: endOffset,
+          onCompleted: () async {
+            setState(() {
+              _flyingCardWidget = null;
+              _selectedCard = null;
+              _hasDrawnThisTurn = false;
+              // Optimistically update top card and active color immediately
+              _topCard = cardToAnimate;
+              if (chosenColor != CardColor.wild) {
+                _activeColor = chosenColor;
+              }
+            });
+            try {
+              // Commit move to Firebase Server
+              await _gameService.playCard(
+                roomId: effectiveRoomId,
+                cardId: card.id,
+                chosenColor: chosenColor,
+                swapTargetPlayerId: swapTargetPlayerId,
+                discardAllTopCardId: discardAllTopCardId,
+              );
+
+              if (card.type == CardType.skipEveryone && mounted) {
+                ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('⚡ ALL SKIP! ബാക്കി എല്ലാവരെയും സ്കിപ്പ് ചെയ്തു. നിങ്ങൾ വീണ്ടും കളിക്കുക!'),
+                    backgroundColor: Colors.amber,
+                    duration: Duration(seconds: 2),
+                  ),
+                );
+              } else if (card.type == CardType.discardAll && mounted) {
+                ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('💥 DISCARD ALL! ആ കളറിലുള്ള എല്ലാ കാർഡുകളും ഡിസ്കാർഡ് ചെയ്തു!'),
+                    backgroundColor: Colors.deepPurpleAccent,
+                    duration: Duration(seconds: 2),
+                  ),
+                );
+              } else if (card.type == CardType.pointSevenSwap && mounted) {
+                ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('⇄ 7 SWAP! കാർഡുകൾ പരസ്പരം കൈമാറി!'),
+                    backgroundColor: Colors.purpleAccent,
+                    duration: Duration(seconds: 2),
+                  ),
+                );
+              } else if (card.type == CardType.pointZeroPass && mounted) {
+                ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('🔄 0 PASS! കാർഡുകൾ അടുത്തയാൾക്ക് കൈമാറി!'),
+                    backgroundColor: Colors.teal,
+                    duration: Duration(seconds: 2),
+                  ),
+                );
+              }
+            } catch (e) {
+              debugPrint('Play card error: $e');
+              if (mounted) {
+                ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('കാർഡ് വെക്കാൻ കഴിഞ്ഞില്ല: $e'),
+                    backgroundColor: Colors.redAccent,
+                    duration: const Duration(seconds: 2),
+                  ),
+                );
+              }
+            } finally {
+              _isProcessingMove = false;
+            }
+          },
+        );
+      });
+    } catch (e) {
+      _isProcessingMove = false;
+    }
   }
 
   Future<CardColor?> _showColorPickerDialog() async {
@@ -549,98 +622,106 @@ class _GameScreenState extends State<GameScreen> {
   }
 
   void _drawCardFromDeck() async {
-    final isMyTurn = _currentTurn == _myUid || _currentTurn.isEmpty;
-    if (!isMyTurn) {
-      String activePlayerName = 'Opponent';
-      final activeMatch = _allPlayers.where((p) => p.id == _currentTurn);
-      if (activeMatch.isNotEmpty) {
-        activePlayerName = activeMatch.first.name;
-      }
-      ScaffoldMessenger.of(context).hideCurrentSnackBar();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('ഇപ്പോൾ $activePlayerName-ന്റെ ടേൺ ആണ്! നിങ്ങളുടെ ടേൺ ആകുമ്പോൾ കാർഡ് എടുക്കാം.'),
-          backgroundColor: Colors.redAccent,
-          duration: const Duration(seconds: 2),
-        ),
-      );
-      return;
-    }
-
-    if (_hasDrawnThisTurn) {
-      ScaffoldMessenger.of(context).hideCurrentSnackBar();
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('നിങ്ങൾ ഇതിനകം കാർഡ് എടുത്തു കഴിഞ്ഞു! കയ്യിലുള്ള കാർഡ് വെക്കുകയോ "PASS" അമർത്തുകയോ ചെയ്യുക.'),
-          backgroundColor: Colors.orangeAccent,
-          duration: Duration(seconds: 2),
-        ),
-      );
-      return;
-    }
-
-    final effectiveRoomId = widget.roomId.isNotEmpty ? widget.roomId : widget.roomCode;
-    final int countBeingDrawn = _pendingDrawCount > 0 ? _pendingDrawCount : 1;
-
-    // Trigger visual draw animation from center deck to player hand
-    final screenSize = MediaQuery.of(context).size;
-    final startOffset = Offset(screenSize.width * 0.35, screenSize.height * 0.35);
-    final endOffset = Offset(screenSize.width * 0.5 - 40, screenSize.height * 0.78);
-
-    setState(() {
-      _selectedCard = null;
-      _remainingDeckCount = (_remainingDeckCount - countBeingDrawn).clamp(0, 999);
-      _flyingCardWidget = FlyingCardAnimation(
-        card: const UnoCard(id: 'flying_drawn', color: CardColor.wild, type: CardType.number),
-        startOffset: startOffset,
-        endOffset: endOffset,
-        onCompleted: () {
-          if (mounted) setState(() => _flyingCardWidget = null);
-        },
-      );
-    });
-
+    if (_isDrawingCard || _isProcessingMove) return;
+    _isDrawingCard = true;
     try {
-      await _gameService.drawCard(roomId: effectiveRoomId);
-      if (mounted) {
-        setState(() {
-          _hasDrawnThisTurn = countBeingDrawn == 1;
-        });
+      final isMyTurn = _currentTurn == _myUid || _currentTurn.isEmpty;
+      if (!isMyTurn) {
+        String activePlayerName = 'Opponent';
+        final activeMatch = _allPlayers.where((p) => p.id == _currentTurn);
+        if (activeMatch.isNotEmpty) {
+          activePlayerName = activeMatch.first.name;
+        }
         ScaffoldMessenger.of(context).hideCurrentSnackBar();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(
-              countBeingDrawn > 1
-                  ? '⚠️ +$countBeingDrawn പെനാൽറ്റി കാർഡുകൾ എടുത്തു!'
-                  : '🃏 കാർഡ് എടുത്തു! മാച്ച് ഉണ്ടെങ്കിൽ കാർഡ് വെക്കാം, അല്ലെങ്കിൽ "PASS" അമർത്തുക.',
-              style: const TextStyle(fontWeight: FontWeight.bold),
-            ),
-            backgroundColor: countBeingDrawn > 1 ? Colors.orangeAccent : UnoColors.blue,
-            duration: const Duration(milliseconds: 2000),
-          ),
-        );
-      }
-    } catch (e) {
-      debugPrint('Draw card error: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).hideCurrentSnackBar();
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('കാർഡ് എടുക്കാൻ കഴിഞ്ഞില്ല: $e'),
+            content: Text('ഇപ്പോൾ $activePlayerName-ന്റെ ടേൺ ആണ്! നിങ്ങളുടെ ടേൺ ആകുമ്പോൾ കാർഡ് എടുക്കാം.'),
             backgroundColor: Colors.redAccent,
+            duration: const Duration(seconds: 2),
           ),
         );
+        return;
       }
+
+      if (_hasDrawnThisTurn) {
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('നിങ്ങൾ ഇതിനകം കാർഡ് എടുത്തു കഴിഞ്ഞു! കയ്യിലുള്ള കാർഡ് വെക്കുകയോ "PASS" അമർത്തുകയോ ചെയ്യുക.'),
+            backgroundColor: Colors.orangeAccent,
+            duration: Duration(seconds: 2),
+          ),
+        );
+        return;
+      }
+
+      final effectiveRoomId = widget.roomId.isNotEmpty ? widget.roomId : widget.roomCode;
+      final int countBeingDrawn = _pendingDrawCount > 0 ? _pendingDrawCount : 1;
+
+      // Trigger visual draw animation from center deck to player hand
+      final screenSize = MediaQuery.of(context).size;
+      final startOffset = Offset(screenSize.width * 0.35, screenSize.height * 0.35);
+      final endOffset = Offset(screenSize.width * 0.5 - 40, screenSize.height * 0.78);
+
+      setState(() {
+        _selectedCard = null;
+        _remainingDeckCount = (_remainingDeckCount - countBeingDrawn).clamp(0, 999);
+        _flyingCardWidget = FlyingCardAnimation(
+          card: const UnoCard(id: 'flying_drawn', color: CardColor.wild, type: CardType.number),
+          startOffset: startOffset,
+          endOffset: endOffset,
+          onCompleted: () {
+            if (mounted) setState(() => _flyingCardWidget = null);
+          },
+        );
+      });
+
+      try {
+        await _gameService.drawCard(roomId: effectiveRoomId);
+        if (mounted) {
+          setState(() {
+            _hasDrawnThisTurn = countBeingDrawn == 1;
+          });
+          ScaffoldMessenger.of(context).hideCurrentSnackBar();
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                countBeingDrawn > 1
+                    ? '⚠️ +$countBeingDrawn പെനാൽറ്റി കാർഡുകൾ എടുത്തു!'
+                    : '🃏 കാർഡ് എടുത്തു! മാച്ച് ഉണ്ടെങ്കിൽ കാർഡ് വെക്കാം, അല്ലെങ്കിൽ "PASS" അമർത്തുക.',
+                style: const TextStyle(fontWeight: FontWeight.bold),
+              ),
+              backgroundColor: countBeingDrawn > 1 ? Colors.orangeAccent : UnoColors.blue,
+              duration: const Duration(milliseconds: 2000),
+            ),
+          );
+        }
+      } catch (e) {
+        debugPrint('Draw card error: $e');
+        if (mounted) {
+          ScaffoldMessenger.of(context).hideCurrentSnackBar();
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('കാർഡ് എടുക്കാൻ കഴിഞ്ഞില്ല: $e'),
+              backgroundColor: Colors.redAccent,
+            ),
+          );
+        }
+      }
+    } finally {
+      _isDrawingCard = false;
     }
   }
 
   void _handlePassTurn() async {
-    final effectiveRoomId = widget.roomId.isNotEmpty ? widget.roomId : widget.roomCode;
-    setState(() {
-      _hasDrawnThisTurn = false;
-      _selectedCard = null;
-    });
+    if (_isPassingTurn || _isProcessingMove) return;
+    _isPassingTurn = true;
     try {
+      final effectiveRoomId = widget.roomId.isNotEmpty ? widget.roomId : widget.roomCode;
+      setState(() {
+        _hasDrawnThisTurn = false;
+        _selectedCard = null;
+      });
       await _gameService.passTurn(roomId: effectiveRoomId);
       if (mounted) {
         ScaffoldMessenger.of(context).hideCurrentSnackBar();
@@ -654,6 +735,8 @@ class _GameScreenState extends State<GameScreen> {
       }
     } catch (e) {
       debugPrint('Pass turn error: $e');
+    } finally {
+      _isPassingTurn = false;
     }
   }
 

@@ -74,6 +74,8 @@ class _LobbyScreenState extends State<LobbyScreen> {
               roomId: room.id,
               roomCode: room.roomCode,
               playerName: _nameController.text.trim().isEmpty ? 'Player' : _nameController.text.trim(),
+              playerId: _gameService.currentUid,
+              gameService: _gameService,
             ),
           ),
         );
@@ -150,6 +152,8 @@ class _LobbyScreenState extends State<LobbyScreen> {
           roomId: _currentRoomId!,
           roomCode: _currentRoomCode ?? 'UNO7K2',
           playerName: _nameController.text.trim().isEmpty ? 'Player 1' : _nameController.text.trim(),
+          playerId: _gameService.currentUid,
+          gameService: _gameService,
         ),
       ),
     );
