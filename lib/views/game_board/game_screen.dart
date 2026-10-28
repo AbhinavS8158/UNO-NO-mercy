@@ -741,328 +741,155 @@ class _GameScreenState extends State<GameScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: UnoColors.background,
-      body: SafeArea(
-        child: Stack(
-          children: [
-            Column(
-              children: [
-                // Top Header Bar
-                _buildHeaderBar(),
+      backgroundColor: const Color(0xFF070609),
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: RadialGradient(
+            center: Alignment(0.0, -0.45),
+            radius: 1.35,
+            colors: [
+              Color(0xFF2C0A0F), // Rich atmospheric crimson glow
+              Color(0xFF16080B),
+              Color(0xFF0D0B0F),
+              Color(0xFF060608), // Pitch dark table edge
+            ],
+            stops: [0.0, 0.35, 0.72, 1.0],
+          ),
+        ),
+        child: SafeArea(
+          child: Stack(
+            children: [
+              Column(
+                children: [
+                  // 1. Top Header Bar (Opponent Profile Capsule + Controls)
+                  _buildHeaderBar(),
 
-                // Real Opponents Bar (ONLY players who actually joined!)
-                _buildRealOpponentsBar(),
+                  // 2. Center-Top Floating Turn Indicator Capsule (e.g. 🟢 YOUR TURN)
+                  _buildFloatingTurnBadge(),
 
-                // In-Game 5-Second Fade Speech Bubble
-                if (_activeSpeechBubble != null)
-                  AnimatedOpacity(
-                    opacity: _bubbleOpacity,
-                    duration: const Duration(milliseconds: 500),
-                    child: Container(
-                      margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 4),
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                      decoration: BoxDecoration(
-                        gradient: const LinearGradient(
-                          colors: [Color(0xFFE65100), Color(0xFFFF8F00)],
+                  // In-Game 5-Second Fade Speech Bubble
+                  if (_activeSpeechBubble != null)
+                    AnimatedOpacity(
+                      opacity: _bubbleOpacity,
+                      duration: const Duration(milliseconds: 500),
+                      child: Container(
+                        margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 4),
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(
+                            colors: [Color(0xFFE65100), Color(0xFFFF8F00)],
+                          ),
+                          borderRadius: BorderRadius.circular(20),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.orangeAccent.withOpacity(0.5),
+                              blurRadius: 10,
+                              offset: const Offset(0, 3),
+                            ),
+                          ],
                         ),
-                        borderRadius: BorderRadius.circular(20),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.chat_bubble, color: Colors.white, size: 16),
+                            const SizedBox(width: 8),
+                            Text(
+                              '${_activeSpeechBubble!.senderName}: ',
+                              style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 13),
+                            ),
+                            Flexible(
+                              child: Text(
+                                _activeSpeechBubble!.text,
+                                style: const TextStyle(color: Colors.white, fontSize: 13),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+
+                  // 3. Central Table (Deck with HUD brackets & Discard Pile with Neon Glow)
+                  Expanded(
+                    child: TableCenterView(
+                      topCard: _topCard,
+                      activeColor: _activeColor,
+                      pendingDrawCount: _pendingDrawCount,
+                      remainingDeckCards: _remainingDeckCount,
+                      isClockwise: _isClockwise,
+                      playerCardCount: _playerHand.length,
+                      onDrawDeckTapped: _drawCardFromDeck,
+                    ),
+                  ),
+
+                  // 4. Player Action Bar (Uno Call & Draw/Pass Buttons)
+                  _buildPlayerActionBar(),
+
+                  // 5. Player's Curved Fanned Cards
+                  CardFanLayout(
+                    cards: _playerHand,
+                    selectedCard: _selectedCard,
+                    topCard: _topCard,
+                    pendingDrawCount: _pendingDrawCount,
+                    isMyTurn: _currentTurn == _myUid || _currentTurn.isEmpty,
+                    onCardSelected: _handleCardSelected,
+                    onCardPlayed: _handleCardPlayed,
+                  ),
+                ],
+              ),
+
+              if (_flyingCardWidget != null) _flyingCardWidget!,
+
+              // 2-Second Universal UNO Call Banner across ALL players
+              if (_activeUnoAlertMessage != null)
+                Center(
+                  child: AnimatedOpacity(
+                    opacity: _unoAlertOpacity,
+                    duration: const Duration(milliseconds: 400),
+                    child: Container(
+                      margin: const EdgeInsets.symmetric(horizontal: 24),
+                      padding: const EdgeInsets.symmetric(horizontal: 26, vertical: 16),
+                      decoration: BoxDecoration(
+                        color: UnoColors.yellow,
+                        borderRadius: BorderRadius.circular(30),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.orangeAccent.withOpacity(0.5),
-                            blurRadius: 10,
-                            offset: const Offset(0, 3),
+                            color: Colors.amberAccent.withOpacity(0.9),
+                            blurRadius: 30,
+                            spreadRadius: 6,
                           ),
                         ],
+                        border: Border.all(color: Colors.white, width: 3.5),
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Icon(Icons.chat_bubble, color: Colors.white, size: 16),
-                          const SizedBox(width: 8),
-                          Text(
-                            '${_activeSpeechBubble!.senderName}: ',
-                            style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 13),
-                          ),
+                          const Icon(Icons.campaign_rounded, color: Colors.black, size: 34),
+                          const SizedBox(width: 10),
                           Flexible(
                             child: Text(
-                              _activeSpeechBubble!.text,
-                              style: const TextStyle(color: Colors.white, fontSize: 13),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-
-                // Central Table (Deck & Discard Pile)
-                Expanded(
-                  child: TableCenterView(
-                    topCard: _topCard,
-                    activeColor: _activeColor,
-                    pendingDrawCount: _pendingDrawCount,
-                    remainingDeckCards: _remainingDeckCount,
-                    isClockwise: _isClockwise,
-                    onDrawDeckTapped: _drawCardFromDeck,
-                  ),
-                ),
-
-                // Player Action Bar (Uno Call & Count)
-                _buildPlayerActionBar(),
-
-                // Player's Curved Fanned Cards
-                CardFanLayout(
-                  cards: _playerHand,
-                  selectedCard: _selectedCard,
-                  topCard: _topCard,
-                  pendingDrawCount: _pendingDrawCount,
-                  isMyTurn: _currentTurn == _myUid || _currentTurn.isEmpty,
-                  onCardSelected: _handleCardSelected,
-                  onCardPlayed: _handleCardPlayed,
-                ),
-              ],
-            ),
-
-            if (_flyingCardWidget != null) _flyingCardWidget!,
-
-            // 2-Second Universal UNO Call Banner across ALL players
-            if (_activeUnoAlertMessage != null)
-              Center(
-                child: AnimatedOpacity(
-                  opacity: _unoAlertOpacity,
-                  duration: const Duration(milliseconds: 400),
-                  child: Container(
-                    margin: const EdgeInsets.symmetric(horizontal: 24),
-                    padding: const EdgeInsets.symmetric(horizontal: 26, vertical: 16),
-                    decoration: BoxDecoration(
-                      color: UnoColors.yellow,
-                      borderRadius: BorderRadius.circular(30),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.amberAccent.withOpacity(0.9),
-                          blurRadius: 30,
-                          spreadRadius: 6,
-                        ),
-                      ],
-                      border: Border.all(color: Colors.white, width: 3.5),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(Icons.campaign_rounded, color: Colors.black, size: 34),
-                        const SizedBox(width: 10),
-                        Flexible(
-                          child: Text(
-                            _activeUnoAlertMessage!,
-                            style: GoogleFonts.rubik(
-                              color: Colors.black,
-                              fontSize: 18,
-                              fontWeight: FontWeight.w900,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildHeaderBar() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-      decoration: const BoxDecoration(
-        color: UnoColors.surface,
-        border: Border(bottom: BorderSide(color: Colors.white10)),
-      ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-            decoration: BoxDecoration(
-              color: Colors.red.withOpacity(0.2),
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: Colors.redAccent),
-            ),
-            child: Text(
-              'ROOM: ${widget.roomCode}',
-              style: GoogleFonts.rubik(
-                color: Colors.white,
-                fontWeight: FontWeight.bold,
-                fontSize: 13,
-              ),
-            ),
-          ),
-          const SizedBox(width: 8),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            decoration: BoxDecoration(
-              color: Colors.black45,
-              borderRadius: BorderRadius.circular(6),
-            ),
-            child: Text(
-              'NO MERCY',
-              style: GoogleFonts.bebasNeue(color: Colors.orangeAccent, fontSize: 13, letterSpacing: 1),
-            ),
-          ),
-          const Spacer(),
-          IconButton(
-            tooltip: 'Game Rules',
-            icon: const Icon(Icons.help_outline_rounded, color: UnoColors.yellow),
-            onPressed: () => showDialog(
-              context: context,
-              builder: (context) => const RulesDialog(),
-            ),
-          ),
-          GestureDetector(
-            onLongPress: _openVoiceSettings,
-            child: IconButton(
-              tooltip: 'Live Voice Chat (Tap to Mute/Unmute, Long press for Settings)',
-              icon: Icon(
-                _voiceService.isMuted ? Icons.mic_off : Icons.mic,
-                color: _voiceService.isConnected
-                    ? (_voiceService.isMuted ? Colors.redAccent : Colors.greenAccent)
-                    : Colors.white38,
-              ),
-              onPressed: () {
-                setState(() {
-                  _voiceService.toggleMute();
-                });
-                ScaffoldMessenger.of(context).hideCurrentSnackBar();
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    duration: const Duration(milliseconds: 1200),
-                    backgroundColor: _voiceService.isMuted ? Colors.redAccent : Colors.green,
-                    content: Text(
-                      _voiceService.isMuted
-                          ? '🔇 മൈക്ക് ഓഫ് ചെയ്തു (Muted)'
-                          : '🎙️ മൈക്ക് ഓൺ ആണ് (Unmuted)',
-                      style: const TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
-          IconButton(
-            tooltip: 'Text Chat',
-            icon: const Icon(Icons.chat_bubble_outline, color: Colors.amber),
-            onPressed: _openTextChat,
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildRealOpponentsBar() {
-    if (_opponents.isEmpty) {
-      return Container(
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        child: const Text(
-          'മറ്റ് കളിക്കാർക്കായി കാത്തിരിക്കുന്നു...',
-          style: TextStyle(color: Colors.white54, fontSize: 12),
-        ),
-      );
-    }
-
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-        children: _opponents.map((opp) {
-          final count = opp.cardCount;
-          final isDanger = count >= 20;
-          final isSpeaking = _activeSpeakers.contains(opp.name);
-          final isTurn = opp.id == _currentTurn;
-
-          return Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            decoration: BoxDecoration(
-              color: isTurn ? Colors.white12 : UnoColors.surface,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: isSpeaking
-                    ? Colors.greenAccent
-                    : (isTurn ? UnoColors.yellow : (isDanger ? Colors.redAccent : Colors.transparent)),
-                width: isSpeaking ? 2.5 : 1.5,
-              ),
-              boxShadow: isSpeaking
-                  ? [
-                      BoxShadow(
-                        color: Colors.greenAccent.withOpacity(0.5),
-                        blurRadius: 8,
-                        spreadRadius: 1,
-                      )
-                    ]
-                  : null,
-            ),
-            child: Row(
-              children: [
-                CircleAvatar(
-                  radius: 14,
-                  backgroundColor: isDanger ? Colors.red : Colors.blueGrey,
-                  child: Text(
-                    opp.name.isNotEmpty ? opp.name[0].toUpperCase() : 'P',
-                    style: const TextStyle(fontSize: 12, color: Colors.white, fontWeight: FontWeight.bold),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Text(
-                          opp.name,
-                          style: TextStyle(
-                            color: isTurn ? UnoColors.yellow : Colors.white,
-                            fontSize: 11,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        if (isTurn) ...[
-                          const SizedBox(width: 4),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-                            decoration: BoxDecoration(
-                              color: UnoColors.yellow,
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                            child: const Text(
-                              'TURN',
-                              style: TextStyle(
+                              _activeUnoAlertMessage!,
+                              style: GoogleFonts.rubik(
                                 color: Colors.black,
-                                fontSize: 8,
-                                fontWeight: FontWeight.bold,
+                                fontSize: 18,
+                                fontWeight: FontWeight.w900,
                               ),
                             ),
                           ),
                         ],
-                      ],
-                    ),
-                    Text(
-                      '$count Cards ${isDanger ? '⚠️' : ''}',
-                      style: TextStyle(
-                        color: isDanger ? Colors.redAccent : Colors.white70,
-                        fontSize: 10,
-                        fontWeight: isDanger ? FontWeight.bold : FontWeight.normal,
                       ),
                     ),
-                  ],
+                  ),
                 ),
-              ],
-            ),
-          );
-        }).toList(),
+            ],
+          ),
+        ),
       ),
     );
   }
 
-  Widget _buildPlayerActionBar() {
+  /// Floating Turn Badge below header (Matching open-mercy.com UI)
+  Widget _buildFloatingTurnBadge() {
     final isMyTurn = _currentTurn == _myUid || _currentTurn.isEmpty;
     String turnPlayerName = widget.playerName;
     if (!isMyTurn) {
@@ -1070,49 +897,317 @@ class _GameScreenState extends State<GameScreen> {
       turnPlayerName = activeMatch.isNotEmpty ? activeMatch.first.name : 'Opponent';
     }
 
+    final accentColor = isMyTurn ? const Color(0xFF00E676) : Colors.amberAccent;
+    final bgColor = isMyTurn ? const Color(0xFF0E2418) : const Color(0xFF26190F);
+
+    return Center(
+      child: Container(
+        margin: const EdgeInsets.only(top: 8, bottom: 2),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+        decoration: BoxDecoration(
+          color: bgColor,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: accentColor.withOpacity(0.4), width: 1.0),
+          boxShadow: [
+            BoxShadow(
+              color: accentColor.withOpacity(0.2),
+              blurRadius: 10,
+              spreadRadius: 1,
+            ),
+          ],
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 8,
+              height: 8,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: accentColor,
+                boxShadow: [
+                  BoxShadow(
+                    color: accentColor.withOpacity(0.8),
+                    blurRadius: 6,
+                    spreadRadius: 1,
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              isMyTurn ? 'YOUR TURN' : '$turnPlayerName\'S TURN',
+              style: GoogleFonts.rubik(
+                color: accentColor,
+                fontSize: 11,
+                fontWeight: FontWeight.w900,
+                letterSpacing: 1.2,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Rich Top Header Bar matching Open-Mercy screenshot:
+  /// Left: Shield Avatar Badge + Opponent Name + Golden Card Count
+  /// Right: Room Code, Mic Toggle, Chat, Rules, Exit
+  Widget _buildHeaderBar() {
+    final primaryOpponent = _opponents.isNotEmpty ? _opponents.first : null;
+    final opponentName = primaryOpponent?.name ?? 'WAITING...';
+    final opponentCardCount = primaryOpponent?.cardCount ?? 7;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      child: Row(
+        children: [
+          // Left: Opponent Profile Capsule (Shield + Name + Card Count)
+          if (primaryOpponent != null)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              decoration: BoxDecoration(
+                color: const Color(0xFF181318),
+                borderRadius: BorderRadius.circular(24),
+                border: Border.all(color: Colors.white12, width: 1.0),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.4),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Shield Icon Avatar
+                  Container(
+                    width: 30,
+                    height: 30,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: const Color(0xFF281820),
+                      border: Border.all(color: Colors.white24, width: 1.0),
+                    ),
+                    child: const Center(
+                      child: Icon(Icons.shield_outlined, color: Colors.white70, size: 17),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        opponentName.toUpperCase(),
+                        style: GoogleFonts.rubik(
+                          color: Colors.white,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 0.6,
+                        ),
+                      ),
+                      Text(
+                        '$opponentCardCount cards',
+                        style: GoogleFonts.rubik(
+                          color: UnoColors.yellow,
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            )
+          else
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: Colors.white10,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: const Text(
+                'WAITING FOR OPPONENT...',
+                style: TextStyle(color: Colors.white54, fontSize: 11, fontWeight: FontWeight.bold),
+              ),
+            ),
+
+          const Spacer(),
+
+          // Right Controls (Room Code, Voice Chat, Chat, Rules, Exit)
+          // Room Code Pill
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+            decoration: BoxDecoration(
+              color: const Color(0xFF181318),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: Colors.white12, width: 1.0),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.tag_rounded, size: 14, color: Colors.white54),
+                const SizedBox(width: 4),
+                Text(
+                  widget.roomCode,
+                  style: GoogleFonts.rubik(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 6),
+
+          // Live Voice Mic Button
+          GestureDetector(
+            onLongPress: _openVoiceSettings,
+            child: _buildHeaderIconButton(
+              icon: _voiceService.isMuted ? Icons.mic_off_rounded : Icons.mic_rounded,
+              color: _voiceService.isConnected
+                  ? (_voiceService.isMuted ? Colors.redAccent : Colors.greenAccent)
+                  : Colors.white38,
+              onPressed: () {
+                setState(() => _voiceService.toggleMute());
+                ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    duration: const Duration(milliseconds: 1200),
+                    backgroundColor: _voiceService.isMuted ? Colors.redAccent : Colors.green,
+                    content: Text(
+                      _voiceService.isMuted ? '🔇 മൈക്ക് ഓഫ് ചെയ്തു (Muted)' : '🎙️ മൈക്ക് ഓൺ ആണ് (Unmuted)',
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+          const SizedBox(width: 6),
+
+          // Text Chat Button
+          _buildHeaderIconButton(
+            icon: Icons.chat_bubble_outline_rounded,
+            color: Colors.amberAccent,
+            onPressed: _openTextChat,
+          ),
+          const SizedBox(width: 6),
+
+          // Game Rules Button
+          _buildHeaderIconButton(
+            icon: Icons.help_outline_rounded,
+            color: Colors.white70,
+            onPressed: () => showDialog(
+              context: context,
+              builder: (context) => const RulesDialog(),
+            ),
+          ),
+          const SizedBox(width: 6),
+
+          // Exit / Leave Game Button
+          _buildHeaderIconButton(
+            icon: Icons.logout_rounded,
+            color: Colors.redAccent,
+            onPressed: () {
+              Navigator.pop(context);
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHeaderIconButton({
+    required IconData icon,
+    required Color color,
+    required VoidCallback onPressed,
+  }) {
+    return InkWell(
+      onTap: onPressed,
+      borderRadius: BorderRadius.circular(10),
+      child: Container(
+        width: 36,
+        height: 36,
+        decoration: BoxDecoration(
+          color: const Color(0xFF181318),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: Colors.white12, width: 1.0),
+        ),
+        child: Center(
+          child: Icon(icon, color: color, size: 18),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPlayerActionBar() {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 6),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'നിങ്ങളുടെ കാർഡുകൾ: ${_playerHand.length}/25',
-                style: TextStyle(
-                  color: _playerHand.length >= 20 ? Colors.redAccent : Colors.white70,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 13,
+          // Player's Name and card count badge
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              color: const Color(0xFF141318),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: Colors.white12, width: 1.0),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.person_rounded, size: 14, color: Colors.white70),
+                const SizedBox(width: 6),
+                Text(
+                  widget.playerName,
+                  style: GoogleFonts.rubik(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 12,
+                  ),
                 ),
-              ),
-              Text(
-                isMyTurn
-                    ? '👉 നിങ്ങളുടെ ടേൺ ആണ്! (${widget.playerName})'
-                    : '⏳ $turnPlayerName-ന്റെ ടേൺ ആണ്...',
-                style: TextStyle(
-                  color: isMyTurn ? Colors.greenAccent : Colors.amberAccent,
-                  fontSize: 12,
-                  fontWeight: isMyTurn ? FontWeight.bold : FontWeight.w600,
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: _playerHand.length >= 20 ? Colors.redAccent.withOpacity(0.3) : Colors.white12,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    '${_playerHand.length} cards',
+                    style: GoogleFonts.rubik(
+                      color: _playerHand.length >= 20 ? Colors.redAccent : Colors.white70,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 11,
+                    ),
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
+
+          // Action Buttons: PASS / DRAW CARD / CALL UNO
           Row(
+            mainAxisSize: MainAxisSize.min,
             children: [
               if (_hasDrawnThisTurn)
                 ElevatedButton.icon(
                   onPressed: _handlePassTurn,
-                  icon: const Icon(Icons.arrow_forward_rounded, size: 16, color: Colors.black),
+                  icon: const Icon(Icons.arrow_forward_rounded, size: 15, color: Colors.black),
                   label: Text(
-                    'PASS (പാസ്സ് ചെയ്യുക)',
-                    style: GoogleFonts.bebasNeue(fontSize: 15, letterSpacing: 1.0, color: Colors.black),
+                    'PASS TURN',
+                    style: GoogleFonts.rubik(fontSize: 12, fontWeight: FontWeight.w900, color: Colors.black),
                   ),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.amberAccent,
                     foregroundColor: Colors.black,
                     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                     elevation: 4,
                   ),
                 )
@@ -1120,19 +1215,19 @@ class _GameScreenState extends State<GameScreen> {
                 ElevatedButton.icon(
                   onPressed: _drawCardFromDeck,
                   icon: Icon(
-                    _pendingDrawCount > 0 ? Icons.warning_amber_rounded : Icons.add_card,
+                    _pendingDrawCount > 0 ? Icons.warning_amber_rounded : Icons.add_card_rounded,
                     size: 15,
                     color: Colors.white,
                   ),
                   label: Text(
-                    _pendingDrawCount > 0 ? 'DRAW +$_pendingDrawCount' : 'DRAW CARD',
-                    style: GoogleFonts.bebasNeue(fontSize: 15, letterSpacing: 1.0),
+                    _pendingDrawCount > 0 ? 'DRAW +$_pendingDrawCount' : 'DRAW',
+                    style: GoogleFonts.rubik(fontSize: 12, fontWeight: FontWeight.w900),
                   ),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: _pendingDrawCount > 0 ? Colors.redAccent : UnoColors.blue,
+                    backgroundColor: _pendingDrawCount > 0 ? Colors.redAccent : const Color(0xFF1E88E5),
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                     elevation: 3,
                   ),
                 ),
@@ -1149,11 +1244,13 @@ class _GameScreenState extends State<GameScreen> {
                   backgroundColor: UnoColors.yellow,
                   foregroundColor: Colors.black,
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  elevation: 4,
+                  shadowColor: UnoColors.yellow.withOpacity(0.5),
                 ),
                 child: Text(
-                  'CALL UNO!',
-                  style: GoogleFonts.bebasNeue(fontSize: 16, letterSpacing: 1.2),
+                  'UNO!',
+                  style: GoogleFonts.rubik(fontSize: 13, fontWeight: FontWeight.w900, letterSpacing: 1.0),
                 ),
               ),
             ],
