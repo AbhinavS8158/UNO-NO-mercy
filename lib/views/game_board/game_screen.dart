@@ -294,7 +294,7 @@ class _GameScreenState extends State<GameScreen> {
     final effectiveRoomId = widget.roomId.isNotEmpty ? widget.roomId : widget.roomCode;
 
     // Validate Playability
-    if (!card.canPlayOn(_topCard, pendingDrawCount: _pendingDrawCount)) {
+    if (!card.canPlayOn(_topCard, pendingDrawCount: _pendingDrawCount, activeColor: _activeColor)) {
       String reason = '${card.displayLabel} ഈ സമയത്ത് കളിക്കാൻ കഴിയില്ല!';
       if (_pendingDrawCount > 0) {
         reason = '+$_pendingDrawCount പെനാൽറ്റി നിലവിലുണ്ട്! +${_topCard.penaltyCount} അല്ലെങ്കിൽ അതിൽ കൂടുതൽ ഉള്ള ഡ്രോ കാർഡ് മാത്രമേ സ്റ്റാക്ക് ചെയ്യാൻ പറ്റൂ (അല്ലെങ്കിൽ കാർഡ് ഡ്രോ ചെയ്യുക).';
@@ -359,6 +359,11 @@ class _GameScreenState extends State<GameScreen> {
             _flyingCardWidget = null;
             _selectedCard = null;
             _hasDrawnThisTurn = false;
+            // Optimistically update top card and active color immediately
+            _topCard = cardToAnimate;
+            if (chosenColor != CardColor.wild) {
+              _activeColor = chosenColor;
+            }
           });
           // Commit move to Firebase Server
           await _gameService.playCard(

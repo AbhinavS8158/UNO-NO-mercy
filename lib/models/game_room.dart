@@ -78,7 +78,7 @@ class GameRoom {
     
     // Parse CardColor
     CardColor parseColor(String? colorStr) {
-      switch (colorStr) {
+      switch (colorStr?.toUpperCase()) {
         case 'RED': return CardColor.red;
         case 'BLUE': return CardColor.blue;
         case 'GREEN': return CardColor.green;
@@ -87,34 +87,50 @@ class GameRoom {
       }
     }
 
-    // Parse CardType
+    // Parse CardType (Handles both DRAW_6 and DRAWSIX, SKIPEVERYONE and SKIP_EVERYONE, etc.)
     CardType parseType(String? typeStr) {
-      switch (typeStr) {
+      final clean = typeStr?.toUpperCase().replaceAll('_', '') ?? '';
+      switch (clean) {
         case 'SKIP': return CardType.skip;
         case 'REVERSE': return CardType.reverse;
-        case 'DRAW_2': return CardType.drawTwo;
-        case 'DRAW_4': return CardType.drawFour;
-        case 'DRAW_6': return CardType.drawSix;
-        case 'DRAW_10': return CardType.drawTen;
-        case 'WILD_REVERSE_DRAW_4': return CardType.wildReverseDrawFour;
-        case 'COLOR_ROULETTE': return CardType.colorRoulette;
-        case 'DISCARD_ALL': return CardType.discardAll;
-        case 'SKIP_EVERYONE': return CardType.skipEveryone;
-        case 'ROULETTE': return CardType.roulette;
-        case 'POINT_SEVEN_SWAP': return CardType.pointSevenSwap;
-        case 'POINT_ZERO_PASS': return CardType.pointZeroPass;
+        case 'DRAWTWO':
+        case 'DRAW2': return CardType.drawTwo;
+        case 'DRAWFOUR':
+        case 'DRAW4': return CardType.drawFour;
+        case 'DRAWSIX':
+        case 'DRAW6': return CardType.drawSix;
+        case 'DRAWTEN':
+        case 'DRAW10': return CardType.drawTen;
+        case 'WILDREVERSEDRAWFOUR':
+        case 'WILDREVERSEDRAW4': return CardType.wildReverseDrawFour;
+        case 'COLORROULETTE':
+        case 'ROULETTE': return CardType.colorRoulette;
+        case 'DISCARDALL': return CardType.discardAll;
+        case 'SKIPEVERYONE': return CardType.skipEveryone;
+        case 'POINTSEVENSWAP':
+        case 'SEVENSWAP': return CardType.pointSevenSwap;
+        case 'POINTZEROPASS':
+        case 'ZEROPASS': return CardType.pointZeroPass;
         default: return CardType.number;
       }
     }
 
     final parsedActiveColor = parseColor(map['activeColor']);
     final topCardColor = parseColor(topCardMap['color']);
+    final parsedType = parseType(topCardMap['type']);
+    final isTopWild = topCardColor == CardColor.wild ||
+        parsedType == CardType.drawSix ||
+        parsedType == CardType.drawTen ||
+        parsedType == CardType.wildReverseDrawFour ||
+        parsedType == CardType.colorRoulette ||
+        parsedType == CardType.roulette;
+
     final topCard = UnoCard(
       id: topCardMap['id'] ?? 'top',
-      color: (topCardColor == CardColor.wild && parsedActiveColor != CardColor.wild)
+      color: (isTopWild && parsedActiveColor != CardColor.wild)
           ? parsedActiveColor
           : topCardColor,
-      type: parseType(topCardMap['type']),
+      type: parsedType,
       numberValue: topCardMap['numberValue'],
     );
 

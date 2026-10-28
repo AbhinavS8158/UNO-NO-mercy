@@ -184,7 +184,8 @@ class FirebaseGameService implements IGameService {
       // Validate play legality against current server room state (Stacking & Color rules)
       int currentPending = (roomData['drawCountPending'] as int?) ?? 0;
       final serverTopCard = _mapToCard(roomData['topCard'] as Map<String, dynamic>? ?? {});
-      if (!playedCard.canPlayOn(serverTopCard, pendingDrawCount: currentPending)) {
+      final serverActiveColor = _parseColor(roomData['activeColor'] as String?);
+      if (!playedCard.canPlayOn(serverTopCard, pendingDrawCount: currentPending, activeColor: serverActiveColor)) {
         return; // Reject illegal move
       }
 
@@ -519,49 +520,48 @@ class FirebaseGameService implements IGameService {
     };
   }
 
+  static CardColor _parseColor(String? col) {
+    switch (col?.toUpperCase()) {
+      case 'RED': return CardColor.red;
+      case 'BLUE': return CardColor.blue;
+      case 'GREEN': return CardColor.green;
+      case 'YELLOW': return CardColor.yellow;
+      default: return CardColor.wild;
+    }
+  }
+
+  static CardType _parseCardType(String? typeStr) {
+    final clean = typeStr?.toUpperCase().replaceAll('_', '') ?? '';
+    switch (clean) {
+      case 'SKIP': return CardType.skip;
+      case 'REVERSE': return CardType.reverse;
+      case 'SKIPEVERYONE': return CardType.skipEveryone;
+      case 'DRAWTWO':
+      case 'DRAW2': return CardType.drawTwo;
+      case 'DRAWFOUR':
+      case 'DRAW4': return CardType.drawFour;
+      case 'DRAWSIX':
+      case 'DRAW6': return CardType.drawSix;
+      case 'DRAWTEN':
+      case 'DRAW10': return CardType.drawTen;
+      case 'WILDREVERSEDRAWFOUR':
+      case 'WILDREVERSEDRAW4': return CardType.wildReverseDrawFour;
+      case 'COLORROULETTE':
+      case 'ROULETTE': return CardType.colorRoulette;
+      case 'DISCARDALL': return CardType.discardAll;
+      case 'POINTSEVENSWAP':
+      case 'SEVENSWAP': return CardType.pointSevenSwap;
+      case 'POINTZEROPASS':
+      case 'ZEROPASS': return CardType.pointZeroPass;
+      default: return CardType.number;
+    }
+  }
+
   UnoCard _mapToCard(Map<String, dynamic> map) {
-    CardColor parseCol(String? col) {
-      switch (col) {
-        case 'RED': return CardColor.red;
-        case 'BLUE': return CardColor.blue;
-        case 'GREEN': return CardColor.green;
-        case 'YELLOW': return CardColor.yellow;
-        default: return CardColor.wild;
-      }
-    }
-
-    CardType parseType(String? typeStr) {
-      switch (typeStr) {
-        case 'SKIP': return CardType.skip;
-        case 'REVERSE': return CardType.reverse;
-        case 'SKIPEVERYONE':
-        case 'SKIP_EVERYONE': return CardType.skipEveryone;
-        case 'DRAWTWO':
-        case 'DRAW_2': return CardType.drawTwo;
-        case 'DRAWFOUR':
-        case 'DRAW_4': return CardType.drawFour;
-        case 'DRAWSIX':
-        case 'DRAW_6': return CardType.drawSix;
-        case 'DRAWTEN':
-        case 'DRAW_10': return CardType.drawTen;
-        case 'WILDREVERSEDRAWFOUR':
-        case 'WILD_REVERSE_DRAW_4': return CardType.wildReverseDrawFour;
-        case 'COLORROULETTE':
-        case 'COLOR_ROULETTE': return CardType.colorRoulette;
-        case 'DISCARDALL':
-        case 'DISCARD_ALL': return CardType.discardAll;
-        case 'POINTSEVENSWAP':
-        case 'POINT_SEVEN_SWAP': return CardType.pointSevenSwap;
-        case 'POINTZEROPASS':
-        case 'POINT_ZERO_PASS': return CardType.pointZeroPass;
-        default: return CardType.number;
-      }
-    }
-
     return UnoCard(
       id: map['id'] ?? '',
-      color: parseCol(map['color']),
-      type: parseType(map['type']),
+      color: _parseColor(map['color']),
+      type: _parseCardType(map['type']),
       numberValue: map['numberValue'],
     );
   }

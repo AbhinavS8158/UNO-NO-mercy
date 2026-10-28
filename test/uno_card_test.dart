@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:uno_no_mercy/models/uno_card.dart';
+import 'package:uno_no_mercy/models/game_room.dart';
 
 void main() {
   group('Official UNO Show em No Mercy Rules Tests', () {
@@ -173,6 +174,51 @@ void main() {
       expect(drawTwo.canPlayOn(topDrawTen, pendingDrawCount: 0), isFalse);
       expect(drawFour.canPlayOn(topDrawTen, pendingDrawCount: 0), isFalse);
       expect(drawSix.canPlayOn(topDrawTen, pendingDrawCount: 0), isFalse);
+    });
+
+    test('Color card can be played on Wild card when activeColor matches', () {
+      const wildCard = UnoCard(id: 'w1', color: CardColor.wild, type: CardType.drawTen);
+      const blueCard = UnoCard(id: 'b1', color: CardColor.blue, type: CardType.number, numberValue: 5);
+      const redCard = UnoCard(id: 'r1', color: CardColor.red, type: CardType.number, numberValue: 5);
+
+      expect(blueCard.canPlayOn(wildCard, activeColor: CardColor.blue), isTrue);
+      expect(redCard.canPlayOn(wildCard, activeColor: CardColor.blue), isFalse);
+    });
+
+    test('GameRoom.fromMap correctly parses special types with and without underscores', () {
+      final roomSix = GameRoom.fromMap('r1', {
+        'topCard': {'id': 'c1', 'color': 'WILD', 'type': 'DRAWSIX'},
+        'activeColor': 'BLUE',
+        'drawCountPending': 6,
+      });
+      expect(roomSix.topCard.type, CardType.drawSix);
+      expect(roomSix.topCard.isWild, isTrue);
+      expect(roomSix.topCard.displayLabel, '+6');
+
+      final roomTen = GameRoom.fromMap('r2', {
+        'topCard': {'id': 'c2', 'color': 'WILD', 'type': 'DRAWTEN'},
+        'activeColor': 'RED',
+        'drawCountPending': 10,
+      });
+      expect(roomTen.topCard.type, CardType.drawTen);
+      expect(roomTen.topCard.isWild, isTrue);
+      expect(roomTen.topCard.displayLabel, '+10');
+
+      final roomFour = GameRoom.fromMap('r3', {
+        'topCard': {'id': 'c3', 'color': 'BLUE', 'type': 'DRAWFOUR'},
+        'activeColor': 'BLUE',
+        'drawCountPending': 4,
+      });
+      expect(roomFour.topCard.type, CardType.drawFour);
+      expect(roomFour.topCard.displayLabel, '+4');
+
+      final roomTwo = GameRoom.fromMap('r4', {
+        'topCard': {'id': 'c4', 'color': 'GREEN', 'type': 'DRAWTWO'},
+        'activeColor': 'GREEN',
+        'drawCountPending': 2,
+      });
+      expect(roomTwo.topCard.type, CardType.drawTwo);
+      expect(roomTwo.topCard.displayLabel, '+2');
     });
   });
 }

@@ -128,7 +128,7 @@ class UnoCard {
     }
   }
 
-  bool canPlayOn(UnoCard topCard, {int pendingDrawCount = 0}) {
+  bool canPlayOn(UnoCard topCard, {int pendingDrawCount = 0, CardColor? activeColor}) {
     // 1. Official Stacking Rule:
     // When a player receives a draw penalty (pendingDrawCount > 0), only equal or higher-value
     // draw cards can be stacked (+2 on +2; +4/+6/+10 on +4; +6/+10 on +6; +10 on +10).
@@ -158,8 +158,13 @@ class UnoCard {
     // 3. Wilds:
     if (isWild) return true;
 
-    // 4. Color:
-    if (color == topCard.color) return true;
+    // 4. Color matching: check direct top card color or active selected color
+    final effectiveTopColor = (activeColor != null && activeColor != CardColor.wild)
+        ? activeColor
+        : topCard.color;
+    if (color == effectiveTopColor || (topCard.isWild && activeColor != null && color == activeColor)) {
+      return true;
+    }
 
     // 5. Number:
     if (numberValue != null && topCard.numberValue != null && numberValue == topCard.numberValue) {
