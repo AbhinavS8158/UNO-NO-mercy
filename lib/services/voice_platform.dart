@@ -1,8 +1,8 @@
 import 'voice_platform_stub.dart'
-    if (dart.library.js) 'voice_platform_web.dart' as platform;
+    if (dart.library.js_interop) 'voice_platform_web.dart' as platform;
 
 export 'voice_platform_stub.dart'
-    if (dart.library.js) 'voice_platform_web.dart';
+    if (dart.library.js_interop) 'voice_platform_web.dart';
 
 void initMicrophone() => platform.initPlatformMicrophone();
 void toggleMicMute(bool isMuted) => platform.togglePlatformVoiceMute(isMuted);

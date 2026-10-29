@@ -1,14 +1,13 @@
-// ignore: avoid_web_libraries_in_flutter
-import 'dart:js' as js;
-import 'dart:js_util' as js_util;
+import 'dart:js_interop';
+import 'dart:js_interop_unsafe';
 
 typedef SignalCallback = void Function(String targetPeerId, String type, String data);
 typedef SpeakingCallback = void Function(bool isSpeaking);
 
 void initPlatformMicrophone() {
   try {
-    if (js.context.hasProperty('initLocalAudio')) {
-      js.context.callMethod('initLocalAudio', []);
+    if (globalContext.has('initLocalAudio')) {
+      globalContext.callMethod('initLocalAudio'.toJS);
     }
   } catch (_) {}
 }
@@ -18,67 +17,69 @@ void setupPlatformVoiceCallbacks({
   required SpeakingCallback onSpeaking,
 }) {
   try {
-    js.context['onSignalFromWebRTC'] = js_util.allowInterop((peerId, type, data) {
-      onSignal(peerId.toString(), type.toString(), data.toString());
-    });
+    globalContext['onSignalFromWebRTC'] = ((JSAny? peerId, JSAny? type, JSAny? data) {
+      onSignal(peerId?.toString() ?? '', type?.toString() ?? '', data?.toString() ?? '');
+    }).toJS;
 
-    js.context['onSpeakingCallback'] = js_util.allowInterop((isSpeaking) {
-      onSpeaking(isSpeaking == true);
-    });
+    globalContext['onSpeakingCallback'] = ((JSAny? isSpeaking) {
+      onSpeaking(isSpeaking != null && isSpeaking.dartify() == true);
+    }).toJS;
   } catch (_) {}
 }
 
 void startPlatformCall(String peerId) {
   try {
-    if (js.context.hasProperty('createVoiceOffer')) {
-      js.context.callMethod('createVoiceOffer', [
-        peerId,
-        js.context['onSignalFromWebRTC'],
-      ]);
+    if (globalContext.has('createVoiceOffer')) {
+      globalContext.callMethod(
+        'createVoiceOffer'.toJS,
+        peerId.toJS,
+        globalContext['onSignalFromWebRTC'],
+      );
     }
   } catch (_) {}
 }
 
 void handlePlatformOffer(String peerId, String offerJson) {
   try {
-    if (js.context.hasProperty('handleVoiceOffer')) {
-      js.context.callMethod('handleVoiceOffer', [
-        peerId,
-        offerJson,
-        js.context['onSignalFromWebRTC'],
-      ]);
+    if (globalContext.has('handleVoiceOffer')) {
+      globalContext.callMethod(
+        'handleVoiceOffer'.toJS,
+        peerId.toJS,
+        offerJson.toJS,
+        globalContext['onSignalFromWebRTC'],
+      );
     }
   } catch (_) {}
 }
 
 void handlePlatformAnswer(String peerId, String answerJson) {
   try {
-    if (js.context.hasProperty('handleVoiceAnswer')) {
-      js.context.callMethod('handleVoiceAnswer', [peerId, answerJson]);
+    if (globalContext.has('handleVoiceAnswer')) {
+      globalContext.callMethod('handleVoiceAnswer'.toJS, peerId.toJS, answerJson.toJS);
     }
   } catch (_) {}
 }
 
 void handlePlatformCandidate(String peerId, String candidateJson) {
   try {
-    if (js.context.hasProperty('handleVoiceCandidate')) {
-      js.context.callMethod('handleVoiceCandidate', [peerId, candidateJson]);
+    if (globalContext.has('handleVoiceCandidate')) {
+      globalContext.callMethod('handleVoiceCandidate'.toJS, peerId.toJS, candidateJson.toJS);
     }
   } catch (_) {}
 }
 
 void togglePlatformVoiceMute(bool isMuted) {
   try {
-    if (js.context.hasProperty('toggleVoiceMute')) {
-      js.context.callMethod('toggleVoiceMute', [isMuted]);
+    if (globalContext.has('toggleVoiceMute')) {
+      globalContext.callMethod('toggleVoiceMute'.toJS, isMuted.toJS);
     }
   } catch (_) {}
 }
 
 void closePlatformVoice() {
   try {
-    if (js.context.hasProperty('closeAllVoicePeers')) {
-      js.context.callMethod('closeAllVoicePeers', []);
+    if (globalContext.has('closeAllVoicePeers')) {
+      globalContext.callMethod('closeAllVoicePeers'.toJS);
     }
   } catch (_) {}
 }
